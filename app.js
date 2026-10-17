@@ -157,7 +157,6 @@ function viewDay(id) {
   if (!d) return viewHome();
   const i = D.days.indexOf(d), prev = D.days[i - 1], next = D.days[i + 1];
   const p = photo(d.photo), dd = dObj(d.date);
-  const strip = D.days.map((x) => { const xd = dObj(x.date); return `<a class="lg-${x.leg}${x.id === id ? " on" : ""}" href="#/day/${x.id}" data-dir="${x.date < d.date ? "prev" : "next"}"><small>${WD[xd.getDay()].slice(0, 2)}</small><b>${xd.getDate()}</b></a>`; }).join("");
   let out = `<div class="dhero lg-${d.leg}${p ? "" : " noimg"}"${bg(d.photo)}>
     <div class="topbar"><a class="gbtn" href="#/" data-dir="pop" aria-label="All days">${ic("left")}</a><span class="sp"></span>
       <a class="gbtn${prev ? "" : " off"}" href="${prev ? "#/day/" + prev.id : "#/"}" data-dir="prev" aria-label="Previous day">${ic("left")}</a>
@@ -167,7 +166,6 @@ function viewDay(id) {
   out += `<div class="lg-${d.leg}">`;
   if (d.rise) out += `<div class="sunrow"><span class="pill">${ic("rise", "ic r")}${esc(d.rise)}</span><span class="pill">${ic("set", "ic s")}${esc(d.set)}</span>${d.place ? `<span class="pill">${ic("pin")}${esc(d.place)}</span>` : ""}</div>`;
   if (d.note) out += `<p class="foot" style="margin:10px 22px 0">${esc(d.note)}</p>`;
-  out += `<nav class="daystrip" aria-label="All days">${strip}</nav>`;
   if (d.date === todayIso()) { const nx = nextItem(d); if (nx) out += nextCard(d, nx, true); }
   if (d.tickets.length) {
     out += `<section class="sec"><div class="sec-h"><h2>Tickets</h2>${T ? "" : '<a href="#/tickets">Import</a>'}</div><div class="hs">${d.tickets.map((tid) => {
@@ -361,8 +359,6 @@ function render() {
 }
 function after(r, el) {
   if (r.name === "day") {
-    const on = el.querySelector(".daystrip a.on");
-    if (on) requestAnimationFrame(() => { on.parentNode.scrollLeft = on.offsetLeft - on.parentNode.clientWidth / 2 + on.clientWidth / 2; });
     markSchedule(el, byDay.get(r.a));
   }
   const codes = el.querySelector(".codes"), dots = [...el.querySelectorAll(".dots i")];
@@ -403,7 +399,7 @@ window.addEventListener("hashchange", render);
 let sx = 0, sy = 0, st = 0;
 document.addEventListener("touchstart", (e) => { const t = e.touches[0]; sx = t.clientX; sy = t.clientY; st = Date.now(); }, { passive: true });
 document.addEventListener("touchend", (e) => {
-  const r = route(); if (r.name !== "day" || e.target.closest(".hs,.daystrip,.codes")) return;
+  const r = route(); if (r.name !== "day" || e.target.closest(".hs,.codes")) return;
   const t = e.changedTouches[0], dx = t.clientX - sx, dy = t.clientY - sy;
   if (Math.abs(dx) < 70 || Math.abs(dy) > 45 || Date.now() - st > 600 || sx < 24) return;
   const i = D.days.findIndex((d) => d.id === r.a), to = D.days[i + (dx < 0 ? 1 : -1)];

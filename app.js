@@ -228,8 +228,8 @@ function viewTicket(id) {
   const back = `<div class="topbar"><a class="gbtn" href="${day && location.hash.includes("from=day") ? "#/day/" + day.id : "#/tickets"}" data-dir="pop" aria-label="Back">${ic("left")}</a><span class="sp"></span>${day ? `<a class="btn" href="#/day/${day.id}" data-dir="push">${fmt(day.date)}</a>` : ""}</div>`;
   if (!tk) return `<div class="tv">${back}</div><header class="lt" style="padding-top:4px"><div><h1>${esc(stub ? stub.name : "Ticket")}</h1><p>${esc(stub ? stub.when : "")}</p></div></header>${importBlock(false)}`;
   const n = tk.codes.length;
-  const codes = n ? `<div class="codes" id="codes">${tk.codes.map((c, i) => `<figure class="code"><img src="${c.img}" alt="${esc(c.type)} code ${i + 1} of ${n}"><figcaption>${n > 1 ? `Code ${i + 1} of ${n} · ` : ""}${esc(c.type)}</figcaption></figure>`).join("")}</div>
-    ${n > 1 ? `<div class="dots" id="dots">${tk.codes.map((_, i) => `<i class="${i ? "" : "on"}"></i>`).join("")}</div>` : ""}` : "";
+  const codes = n ? `<div class="codes">${tk.codes.map((c, i) => `<figure class="code"><img src="${c.img}" alt="${esc(c.type)} code ${i + 1} of ${n}"><figcaption>${n > 1 ? `Code ${i + 1} of ${n} · ` : ""}${esc(c.type)}</figcaption></figure>`).join("")}</div>
+    ${n > 1 ? `<div class="dots">${tk.codes.map((_, i) => `<i class="${i ? "" : "on"}"></i>`).join("")}</div>` : ""}` : "";
   const pages = tk.pages.map((p, i) => `<img loading="lazy" src="${p}" alt="Page ${i + 1}">`).join("");
   return `<div class="tv lg-${leg}">${back}<article class="tpass">
     <div class="hd"><div><small>${esc(legName(leg))}</small><h1>${esc(tk.name)}</h1></div></div>
@@ -260,7 +260,7 @@ function viewBookings() {
 
 function viewInfo() {
   const L = (rows) => `<div class="list">${rows.join("")}</div>`;
-  let out = `<header class="lt"><div><h1>Info</h1><p>Hotels, help, phrases, cafés</p></div></header>`;
+  let out = `<header class="lt"><div><h1>Info</h1><p>Hotels, emergency, phrases</p></div></header>`;
   out += `<section class="sec"><div class="sec-h"><h2>Hotels</h2></div>${L(D.hotels.map((h) => {
     const rng = `${fmt(h.from).slice(4)} – ${fmt(h.to).slice(4)}`;
     return h.name ? `<a class="row" href="${esc(h.url)}" style="--inset:61px"><span class="tile">${ic("bed")}</span><span class="tx"><b>${esc(h.city)} · ${esc(h.name)}</b><span>${rng} · ${esc(h.address)}</span></span>${ic("right", "ic chev")}</a>`
@@ -272,20 +272,25 @@ function viewInfo() {
   out += Object.entries(D.phrases).map(([lang, items], li) => `<section class="sec"><div class="sec-h"><h2>${esc(lang.split(" (")[0])}</h2><span>Tap to show</span></div>${L(items.map(([en, fx], i) =>
     `<a class="row" href="#/say/${li}/${i}" data-dir="push"><span class="tx"><b>${esc(fx)}</b><span>${esc(en)}</span></span>${ic("right", "ic chev")}</a>`))}</section>`).join("");
   out += `<section class="sec"><div class="sec-h"><h2>Maps offline</h2></div>${L(D.tips.map((t) => `<div class="row" style="--inset:61px"><span class="tile" style="background:var(--green)">${ic("map")}</span><span class="tx"><span style="color:var(--label);font-size:15px">${esc(t)}</span></span></div>`))}</section>`;
-  for (const l of D.legs) {
-    if (!l.cafes.length) continue;
-    out += `<section class="sec lg-${l.key}"><div class="sec-h"><h2><i></i>Cafés &amp; shops · ${esc(l.name)}</h2></div><div class="grid2">${l.cafes.map((c) => {
-      const p = photo(c.photo);
-      return `<a class="ccard" href="${esc(c.url)}"><span class="ph${p ? "" : " noimg"}"${bg(c.photo)}>${p ? "" : `<b>${esc(c.name.replace(/^(Café|Confiserie|Konditorei) /, "")[0])}</b>`}</span>
-        <span class="tx"><b>${esc(c.name)}</b><span>${esc(c.desc)}${c.when ? " · " + esc(c.when) : ""}</span></span></a>`;
-    }).join("")}</div></section>`;
-  }
   const notes = D.legs.flatMap((l) => l.notes.map((n) => `<div class="row"><span class="tx"><span style="color:var(--label-2);font-size:15px">${n}</span></span></div>`));
   if (notes.length) out += `<section class="sec"><div class="sec-h"><h2>Closures &amp; notes</h2></div>${L(notes)}</section>`;
   out += `<section class="sec"><div class="sec-h"><h2>This app</h2></div>${L([
     `<button class="row" data-act="import" style="--inset:61px"><span class="tile">${ic("down")}</span><span class="tx"><b>${T ? "Update tickets" : "Import tickets"}</b><span>${T ? `Pack from ${esc(T.built)}` : "Ticket pack from the Mac"}</span></span></button>`,
     `<div class="row" style="--inset:61px"><span class="tile" style="background:var(--card-3)">${ic("info")}</span><span class="tx"><b>Plan updated ${esc(D.built)}</b><span>Updates arrive automatically when you're online</span></span></div>`])}
-    <p class="credit" style="margin-top:14px">Photos from Wikimedia Commons: ${D.credits.map((c) => `${esc(c.what)} — ${esc(c.artist)}, ${esc(c.license)}`).join(" · ")}</p></section>`;
+    <p class="credit" style="margin-top:14px">Photos from Wikimedia Commons and Unsplash: ${D.credits.map((c) => `${esc(c.what)} — ${esc(c.artist)}, ${esc(c.license)}`).join(" · ")}</p></section>`;
+  return out;
+}
+
+function viewCafes() {
+  let out = `<header class="lt"><div><h1>Cafés</h1><p>Cafés, treats and shops · tap for Maps</p></div></header>`;
+  for (const l of D.legs) {
+    if (!l.cafes.length) continue;
+    out += `<section class="sec lg-${l.key}"><div class="sec-h"><h2><i></i>${esc(l.name)}</h2><span>${l.cafes.length}</span></div><div class="grid2">${l.cafes.map((c) => {
+      const p = photo(c.photo);
+      return `<a class="ccard" href="${esc(c.url)}"><span class="ph${p ? "" : " noimg"}"${bg(c.photo)}>${p ? "" : `<b>${esc(c.name.replace(/^(Café|Confiserie|Konditorei) /, "")[0])}</b>`}</span>
+        <span class="tx"><b>${esc(c.name)}</b><span>${esc(c.desc)}${c.when ? " · " + esc(c.when) : ""}</span></span></a>`;
+    }).join("")}</div></section>`;
+  }
   return out;
 }
 
@@ -296,49 +301,85 @@ function viewSay(li, i) {
   return `<div class="say"><a class="gbtn" href="#/info" data-dir="pop" aria-label="Close">${ic("close")}</a><b>${esc(p[1])}</b><span>${esc(p[0])}</span></div>`;
 }
 
-/* ---------- router ---------- */
-let navDir = "tab", lastRoute = null;
+/* ---------- router ----------
+   Screens are kept alive once built (photos are blob URLs, so they stay decoded): going back is
+   instant and lands where you were. A small LRU keeps memory in check. */
+let navDir = "tab", lastRoute = null, cur = null, lastKey = "#/";
+const screens = new Map();
+const ROOTS = new Set(["#/", "#/tickets", "#/bookings", "#/cafes", "#/info"]);
 function route() {
   const parts = (location.hash.replace(/^#\/?/, "").split("?")[0] || "").split("/").filter(Boolean);
   const [name = "home", a, b] = parts;
   return { name, a, b };
 }
-function tabOf(r) { return { home: "days", day: "days", tickets: "tickets", ticket: "tickets", bookings: "bookings", info: "info", say: "info" }[r.name] || "days"; }
+const keyNow = () => (location.hash && location.hash !== "#" ? location.hash : "#/");
+function tabOf(r) { return { home: "days", day: "days", tickets: "tickets", ticket: "tickets", bookings: "bookings", cafes: "cafes", info: "info", say: "info" }[r.name] || "days"; }
+function viewFor(r) {
+  return r.name === "day" ? viewDay(r.a) : r.name === "ticket" ? viewTicket(r.a) : r.name === "tickets" ? viewTickets()
+    : r.name === "bookings" ? viewBookings() : r.name === "cafes" ? viewCafes() : r.name === "info" ? viewInfo()
+    : r.name === "say" ? viewSay(r.a, r.b) : viewHome();
+}
+function invalidate() { screens.forEach((s) => s.el.remove()); screens.clear(); cur = null; }
+// navigate, and still draw when the hash is already there (no hashchange would fire)
+function go(hash) { if (keyNow() === hash) render(); else location.hash = hash; }
 function render() {
-  const r = route();
-  const html = r.name === "day" ? viewDay(r.a) : r.name === "ticket" ? viewTicket(r.a) : r.name === "tickets" ? viewTickets()
-    : r.name === "bookings" ? viewBookings() : r.name === "info" ? viewInfo() : r.name === "say" ? viewSay(r.a, r.b) : viewHome();
+  const r = route(), key = keyNow(), dir = navDir;
   const apply = () => {
-    app.innerHTML = html;
-    window.scrollTo(0, 0);
+    if (cur) { cur.scroll = window.scrollY; cur.el.hidden = true; }
+    let s = screens.get(key);
+    const fresh = !s;
+    if (fresh) {
+      const el = document.createElement("div");
+      el.className = "scr";
+      el.innerHTML = viewFor(r);
+      app.appendChild(el);
+      s = { el, scroll: 0 };
+      screens.set(key, s);
+      after(r, el);
+      for (const [k, v] of screens) {  // forget the oldest non-tab screens past ~14
+        if (screens.size <= 14) break;
+        if (v !== s && !ROOTS.has(k)) { v.el.remove(); screens.delete(k); }
+      }
+    } else { screens.delete(key); screens.set(key, s); }  // mark as recently used
+    s.el.hidden = false;
+    cur = s;
+    window.scrollTo(0, !fresh && (dir === "pop" || dir === "tab") ? s.scroll : 0);
+    if (!fresh) refreshNow();
     $$("#tabs a").forEach((a) => a.classList.toggle("on", a.dataset.tab === tabOf(r)));
     $("#tabs").hidden = r.name === "say";
-    after(r);
+    const on = $("#tabs a.on");
+    $("#tabs").style.setProperty("--i", on ? [...$$("#tabs a")].indexOf(on) : 0);
+    $("#tabs").classList.remove("mini");
   };
-  document.documentElement.dataset.nav = navDir;
+  document.documentElement.dataset.nav = dir;
   if (document.startViewTransition && !reduce && lastRoute) {
     const vt = document.startViewTransition(apply);
     // a quick second tap skips the running animation; that's expected, not an error
     vt.ready.catch(() => {}); vt.finished.catch(() => {}); vt.updateCallbackDone.catch(() => {});
   } else apply();
-  lastRoute = r; navDir = "tab";
+  lastRoute = r; lastKey = key; navDir = "tab";
 }
-function after(r) {
+function after(r, el) {
   if (r.name === "day") {
-    const on = $(".daystrip a.on");
-    if (on) on.parentNode.scrollLeft = on.offsetLeft - on.parentNode.clientWidth / 2 + on.clientWidth / 2;
-    const d = byDay.get(r.a);
-    if (d && d.date === todayIso()) {
-      const now = new Date(), n = now.getHours() * 60 + now.getMinutes(); let marked = false;
-      $$(".sched li").forEach((li) => { const m = mins(li.dataset.t); if (m == null) return; if (m + 20 < n) li.classList.add("is-done"); else if (!marked) { li.classList.add("is-next"); marked = true; } });
-    }
+    const on = el.querySelector(".daystrip a.on");
+    if (on) requestAnimationFrame(() => { on.parentNode.scrollLeft = on.offsetLeft - on.parentNode.clientWidth / 2 + on.clientWidth / 2; });
+    markSchedule(el, byDay.get(r.a));
   }
-  const codes = $("#codes"), dots = $$("#dots i");
+  const codes = el.querySelector(".codes"), dots = [...el.querySelectorAll(".dots i")];
   if (codes && dots.length) codes.addEventListener("scroll", () => {
-    const first = codes.firstElementChild, step = first.offsetWidth + 12;
+    const step = codes.firstElementChild.offsetWidth + 12;
     const i = Math.min(dots.length - 1, Math.max(0, Math.round(codes.scrollLeft / step)));
     dots.forEach((d, k) => d.classList.toggle("on", k === i));
   }, { passive: true });
+}
+function markSchedule(el, d) {
+  if (!d || d.date !== todayIso()) return;
+  const now = new Date(), n = now.getHours() * 60 + now.getMinutes(); let marked = false;
+  el.querySelectorAll(".sched li").forEach((li) => {
+    li.classList.remove("is-next", "is-done");
+    const m = mins(li.dataset.t); if (m == null) return;
+    if (m + 20 < n) li.classList.add("is-done"); else if (!marked) { li.classList.add("is-next"); marked = true; }
+  });
 }
 
 /* ---------- interactions ---------- */
@@ -371,28 +412,28 @@ document.addEventListener("touchend", (e) => {
 
 /* ---------- live "next up": refresh the countdown in place each minute and on return to the app ---------- */
 function refreshNow() {
-  if (!D) return;
+  if (!D || !cur) return;
   const r = route(), t = todayIso(), today = byDay.get(t.replace(/-/g, ""));
   if (!today || (r.name !== "home" && !(r.name === "day" && r.a === today.id))) return;
-  const card = $(".next"), nx = nextItem(today);
+  const el = cur.el, card = el.querySelector(".next"), nx = nextItem(today);
   if (card && nx) card.outerHTML = nextCard(today, nx, r.name === "day");
   else if (card && !nx) card.remove();
-  else if (!card && nx) return render();  // first item of the day just came into range
-  if (r.name === "day") {
-    const now = new Date(), n = now.getHours() * 60 + now.getMinutes(); let marked = false;
-    $$(".sched li").forEach((li) => {
-      li.classList.remove("is-next", "is-done");
-      const m = mins(li.dataset.t); if (m == null) return;
-      if (m + 20 < n) li.classList.add("is-done"); else if (!marked) { li.classList.add("is-next"); marked = true; }
-    });
-  }
+  else if (!card && nx) { screens.delete(keyNow()); el.remove(); cur = null; return render(); }  // first item came into range
+  if (r.name === "day") markSchedule(el, today);
 }
 setInterval(refreshNow, 60000);
+let lastY = 0;
+addEventListener("scroll", () => {
+  const y = window.scrollY, bar = $("#tabs");
+  if (Math.abs(y - lastY) < 8) return;
+  bar.classList.toggle("mini", y > lastY && y > 120);
+  lastY = y;
+}, { passive: true });
 let seenDay = todayIso();
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState !== "visible" || !D) return;
   const t = todayIso(), today = byDay.get(t.replace(/-/g, ""));
-  if (t !== seenDay && today) { seenDay = t; navDir = "tab"; location.hash = "#/day/" + today.id; return; }  // new morning: open today
+  if (t !== seenDay) { seenDay = t; invalidate(); navDir = "tab"; go(today ? "#/day/" + today.id : keyNow()); return; }  // new day: rebuild, open today
   seenDay = t; refreshNow();
 });
 
@@ -409,16 +450,26 @@ function pickPack() {
       if (!pack || !Array.isArray(pack.tickets)) throw new Error("not a pack");
       await kv("put", "pack", buf);
       try { await navigator.storage?.persist?.(); } catch (_) {}
-      setTickets(pack);
+      await setTickets(pack);
       toast(`${pack.tickets.length} tickets saved on this phone`);
-      render();
+      invalidate(); render();
     } catch (err) {
       toast("That file isn't this trip's ticket pack");
     }
   };
   inp.click();
 }
-function setTickets(pack) { T = pack; byTicket.clear(); if (pack) pack.tickets.forEach((t) => byTicket.set(t.id, t)); }
+const blobUrl = async (dataUri) => URL.createObjectURL(await (await fetch(dataUri)).blob());
+let ticketUrls = [];
+async function setTickets(pack) {
+  ticketUrls.forEach((u) => URL.revokeObjectURL(u)); ticketUrls = [];
+  for (const t of pack.tickets) {
+    t.codes = await Promise.all(t.codes.map(async (c) => ({ ...c, img: await blobUrl(c.img) })));
+    t.pages = await Promise.all(t.pages.map(blobUrl));
+    t.codes.forEach((c) => ticketUrls.push(c.img)); ticketUrls.push(...t.pages);
+  }
+  T = pack; byTicket.clear(); pack.tickets.forEach((t) => byTicket.set(t.id, t));
+}
 
 /* ---------- boot ---------- */
 function sprite() {
@@ -449,7 +500,9 @@ async function boot() {
   document.querySelector('meta[name="apple-mobile-web-app-title"]').setAttribute("content", D.trip.name);
   D.days.forEach((d) => byDay.set(d.id, d));
   D.tickets.forEach((t) => stubs.set(t.id, t));
-  try { const buf = await kv("get", "pack"); if (buf) setTickets(await unseal(buf)); } catch (_) {}
+  await Promise.all(Object.keys(D.photos).map(async (k) => { D.photos[k] = await blobUrl(D.photos[k]); }));  // decode once, reuse everywhere
+  try { const buf = await kv("get", "pack"); if (buf) await setTickets(await unseal(buf)); } catch (_) {}
+  app.innerHTML = "";
   $("#tabs").hidden = false;
   if (!location.hash && tripState() === "during") { const t = byDay.get(todayIso().replace(/-/g, "")); if (t) history.replaceState(null, "", "#/day/" + t.id); }
   render();

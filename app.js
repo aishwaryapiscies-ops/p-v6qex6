@@ -5,6 +5,7 @@
 const ICONS = {
   pass: '<path d="M4 7a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v2a2 2 0 0 0 0 4v4a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3v-4a2 2 0 0 0 0-4Z"/><path d="M9.5 4v16" stroke-dasharray="1.5 2.5"/>',
   cal: '<rect x="3.5" y="5" width="17" height="15.5" rx="3.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/><path d="M7.6 13.6h.01M12 13.6h.01M16.4 13.6h.01M7.6 17h.01M12 17h.01"/>',
+  train: '<rect x="5" y="3" width="14" height="14" rx="3.5"/><path d="M5 10.5h14M9 20.5l-2 1.5M15 20.5l2 1.5M8.5 13.8h.01M15.5 13.8h.01"/><path d="M8 17l-1.5 2.5M16 17l1.5 2.5"/>',
   ticket: '<path d="M3 9V7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a3 3 0 0 0 0 6v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a3 3 0 0 0 0-6Z"/><path d="M14 5v2.5M14 11v2M14 16.5V19"/>',
   list: '<path d="M9 6.5h11M9 12h11M9 17.5h11"/><path d="m3.5 6.5 1.3 1.3 2.2-2.6M3.5 12l1.3 1.3L7 10.7M3.5 17.5l1.3 1.3L7 16.2"/>',
   info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.6v.1"/>',
@@ -215,20 +216,44 @@ function importBlock(again) {
     <button class="btn solid wide" data-act="import">${ic("down")}Import ticket pack</button></div>`;
 }
 
+/* Tickets: a plain list in the order you'll use them. During the trip, today's come first;
+   anything whose last day has passed sinks to "Used" at the bottom. Details live on each ticket's page. */
+const KIND_IC = { hotel: "bed", car: "car", train: "train", entry: "qr" };
+function ticketList() {
+  return D.tickets.map((s) => ({ ...s, until: s.until || s.date, leg: (D.days.find((d) => d.tickets.includes(s.id)) || D.days.find((d) => d.date === s.date) || D.days[0]).leg }))
+    .sort((a, b) => (a.date || "").localeCompare(b.date || "") || (mins(a.when) ?? 9999) - (mins(b.when) ?? 9999));
+}
+function useLine(x, today) {
+  const strip = (w) => w.replace(/^[A-Z][a-z]{2} \d{1,2} [A-Z][a-z]{2}\s*(·\s*)?/, "");
+  if (x.kind === "hotel") {
+    if (today && x.until === today) return "Check-out today";
+    return `${fmt(x.date).slice(4)} → ${fmt(x.until).slice(4)}`;
+  }
+  if (x.until !== x.date) return today && x.until === today ? "Return today" : `Until ${fmt(x.until)}`;
+  return strip(x.when).split(" · ")[0];
+}
+function tRow(x, today, used) {
+  const locked = !byTicket.get(x.id);
+  return `<a class="row tkrow lg-${x.leg}${used ? " used" : ""}${locked ? " locked" : ""}" href="#/ticket/${x.id}" style="--inset:68px">
+    <span class="qt">${ic(KIND_IC[x.kind] || "qr")}</span><span class="tx"><b>${esc(x.name)}</b><span>${esc(useLine(x, today))}</span></span>${ic("right", "ic chev")}</a>`;
+}
 function viewTickets() {
-  let out = `<header class="lt"><div><h1>Tickets</h1><p>${T ? `${T.tickets.length} tickets · on this phone only` : "Not imported yet"}</p></div>${T ? `<button class="act" data-act="import" aria-label="Update tickets">${ic("down")}</button>` : ""}</header>`;
-  if (!T) return out + importBlock(false);
-  const t = todayIso();
-  const list = [...T.tickets].sort((a, b) => (a.date || "").localeCompare(b.date || ""));
-  out += `<div class="wallet">${list.map((tk) => {
-    const day = D.days.find((d) => d.tickets.includes(tk.id));
-    const leg = day ? day.leg : "munich";
-    const dd = tk.date ? dObj(tk.date) : null;
-    const time = (/(\d{1,2}[:.]\d{2})/.exec(tk.when) || [])[1] || "";
-    return `<a class="wpass lg-${leg}${tk.date && tk.date < t ? " is-past" : ""}" href="#/ticket/${tk.id}" data-dir="push">
-      <div class="h"><b>${esc(tk.name)}</b><span>${dd ? `${WD[dd.getDay()]} ${MON[dd.getMonth()]}<em>${dd.getDate()}</em>` : ""}</span></div>
-      <div class="f"><div><small>Time</small><b>${esc(time || "—")}</b></div><div><small>Codes</small><b>${tk.codes.length || "PDF"}</b></div><div><small>Ref</small><b>${esc(tk.ref)}</b></div></div></a>`;
-  }).join("")}</div><p class="foot" style="margin:18px 20px 0">Pack from ${esc(T.built)}. New bookings? Rebuild the pack on the Mac and import it again; it replaces this set.</p>`;
+  const t = todayIso(), st = tripState(), all = ticketList();
+  const live = st === "during";
+  const now = live ? all.filter((x) => x.date <= t && t <= x.until) : [];
+  const used = all.filter((x) => x.until < t);
+  const next = all.filter((x) => !now.includes(x) && !used.includes(x));
+  let out = `<header class="lt"><div><h1>Tickets</h1><p>${live ? `${now.length} for today` : `${all.length} tickets and bookings`}</p></div>${T ? `<button class="act" data-act="import" aria-label="Update tickets">${ic("down")}</button>` : ""}</header>`;
+  if (!T) out += importBlock(false);
+  if (now.length) out += `<section class="sec"><div class="sec-h"><h2>Today</h2><span>${fmt(t)}</span></div><div class="list">${now.map((x) => tRow(x, t)).join("")}</div></section>`;
+  if (next.length) {
+    const byDate = new Map();
+    next.forEach((x) => { if (!byDate.has(x.date)) byDate.set(x.date, []); byDate.get(x.date).push(x); });
+    out += `<section class="sec"><div class="sec-h"><h2>${live ? "Coming up" : "By day"}</h2></div>${[...byDate].map(([date, xs]) =>
+      `<h3 class="dayhead">${fmt(date)}</h3><div class="list">${xs.map((x) => tRow(x)).join("")}</div>`).join("")}</section>`;
+  }
+  if (used.length) out += `<section class="sec"><div class="sec-h"><h2>Used</h2><span>${used.length}</span></div><div class="list">${used.map((x) => tRow(x, null, true)).join("")}</div></section>`;
+  if (T) out += `<p class="foot" style="margin:16px 22px 0">On this phone only · pack from ${esc(T.built)}</p>`;
   return out;
 }
 

@@ -236,7 +236,7 @@ function tRow(x, today, used) {
   if (x.kind === "booked") {
     const tag = x.href ? "a" : "div";
     return `<${tag} class="row tkrow lg-${x.leg}${used ? " used" : ""}"${x.href ? ` href="${esc(x.href)}"` : ""} style="--inset:68px"><span class="qt">${ic("check")}</span>
-      <span class="tx"><b>${esc(x.name)}</b><span>${esc((x.when || "").replace(/^[A-Z][a-z]{2} \d{1,2}\s*(·\s*)?/, ""))} · booked, no ticket file</span></span></${tag}>`;
+      <span class="tx"><b>${esc(x.name)}</b><span>${esc((x.when || "").replace(/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun) \d{1,2}\s*(·\s*)?/, ""))} · booked, no ticket file</span></span></${tag}>`;
   }
   const locked = !byTicket.get(x.id);
   return `<a class="row tkrow lg-${x.leg}${used ? " used" : ""}${locked ? " locked" : ""}" href="#/ticket/${x.id}" style="--inset:68px">
@@ -254,7 +254,7 @@ const shortWhat = (w) => w.split(" · ")[0].replace(/\s*\([^)]*\)/g, "").trim();
 function todoRow(b) {
   const tag = b.href ? "a" : "div";
   return `<${tag} class="row tkrow lg-${b.leg} todo-row"${b.href ? ` href="${esc(b.href)}"` : ""} style="--inset:68px"><span class="qt">${ic(b.href ? "ext" : "list")}</span>
-    <span class="tx"><b>${esc(shortWhat(b.what))}</b><span>${esc(b.when.replace(/^[A-Z][a-z]{2} \d{1,2}\s*(·\s*)?/, "") || b.when)}</span></span><span class="badge">${esc(b.status)}</span></${tag}>`;
+    <span class="tx"><b>${esc(shortWhat(b.what))}</b><span>${esc(b.when.replace(/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun) \d{1,2}\s*(·\s*)?/, "") || b.when)}</span></span><span class="badge">${esc(b.status)}</span></${tag}>`;
 }
 function viewTickets() {
   const t = todayIso(), st = tripState(), all = ticketList().concat(bookedOnly().map((x) => ({ ...x, until: x.until || x.date })))
@@ -410,7 +410,11 @@ function render() {
   };
   document.documentElement.dataset.nav = dir;
   if (dir !== "none" && document.startViewTransition && !reduce && lastRoute) {  // pager commits and segment switches draw instantly
-    const vt = document.startViewTransition(apply);
+    // the swap waits for the next frame; if frames are paused (app just resumed, pane hidden), don't wait
+    let ran = false;
+    const once = () => { if (!ran) { ran = true; apply(); } };
+    const vt = document.startViewTransition(once);
+    setTimeout(once, 450);
     // a quick second tap skips the running animation; that's expected, not an error
     vt.ready.catch(() => {}); vt.finished.catch(() => {}); vt.updateCallbackDone.catch(() => {});
   } else apply();

@@ -305,8 +305,8 @@ details.pages img{display:block;width:100%;height:auto;background:#fff;border-to
 /* specular rim: a thin ring lit from the top-left, like light catching the edge of a glass slab */
 .glass::after,.tabs::after,.gbtn::after,.chip-glass::after,.nbchip::after{content:"";position:absolute;inset:0;border-radius:inherit;padding:1px;pointer-events:none;
   background:var(--rim);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;opacity:.9}
-.tabs{position:fixed;z-index:10;left:50%;bottom:calc(var(--bot) + 10px);transform:translateX(-50%);width:min(calc(100vw - 28px),440px);height:66px;
-  display:grid;grid-template-columns:repeat(5,1fr);padding:5px;border-radius:33px;isolation:isolate;
+.tabs{position:fixed;z-index:10;left:50%;bottom:calc(var(--bot) + 10px);transform:translateX(-50%);width:min(calc(100vw - 40px),380px);height:66px;
+  display:grid;grid-template-columns:repeat(4,1fr);padding:5px;border-radius:33px;isolation:isolate;
   transition:height .45s var(--spring),width .45s var(--spring),bottom .45s var(--spring)}
 .tabs::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:-1;
   background:radial-gradient(120% 90% at 18% -10%,rgba(255,255,255,.22),transparent 55%),radial-gradient(90% 80% at 100% 120%,rgba(255,255,255,.08),transparent 60%)}
@@ -317,7 +317,7 @@ details.pages img{display:block;width:100%;height:auto;background:#fff;border-to
 .tabs a.on{color:var(--tab-on,var(--tint))}
 .tabs a.on .ic{stroke-width:2.3}
 .tabs a:active .ic{transform:scale(.86)}
-.tabs .bubble{position:absolute;z-index:0;top:5px;bottom:5px;left:5px;width:calc((100% - 10px) / 5);border-radius:28px;background:var(--glass-sel);
+.tabs .bubble{position:absolute;z-index:0;top:5px;bottom:5px;left:5px;width:calc((100% - 10px) / 4);border-radius:28px;background:var(--glass-sel);
   box-shadow:inset 0 1px .5px rgba(255,255,255,.35),inset 0 -1px .5px rgba(255,255,255,.08),inset 0 8px 14px -10px rgba(255,255,255,.3),0 2px 8px rgba(0,0,0,.12);
   transform:translateX(calc(var(--i,0) * 100%));transition:transform .55s var(--spring),background .25s,box-shadow .25s}
 /* pressing the bar turns the selection into a clear magnifying lens that follows your finger */
@@ -325,7 +325,7 @@ details.pages img{display:block;width:100%;height:auto;background:#fff;border-to
 .tabs.press a.hover{color:var(--tab-on,var(--tint))}
 .tabs.press a.hover .ic{transform:scale(1.12)}
 .tabs{touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
-.tabs.mini{height:54px;width:min(calc(100vw - 96px),330px);bottom:calc(var(--bot) + 6px)}
+.tabs.mini{height:54px;width:min(calc(100vw - 110px),280px);bottom:calc(var(--bot) + 6px)}
 .tabs.mini a span{opacity:0;max-height:0;transform:translateY(4px)}
 .tabs.mini a{gap:0}
 .tabs.mini a .ic{width:23px;height:23px}
@@ -395,3 +395,13 @@ html[data-nav=tab]::view-transition-old(root){animation:fadeOut .16s ease-in}
 .dayhead:first-of-type{margin-top:2px}
 .tkrow.used{opacity:.5}
 .tkrow.used .qt{background:var(--fill);color:var(--label-2)}
+
+.todo-row .tx b{font-weight:500}
+.todo-row .qt{background:var(--fill);color:var(--label-2)}
+
+/* iOS segmented control */
+.seg{display:grid;grid-template-columns:repeat(4,1fr);gap:2px;margin:10px 20px 0;padding:2px;border-radius:12px;background:var(--fill)}
+.seg a{display:flex;align-items:center;justify-content:center;min-height:40px;padding:4px 6px;border-radius:10px;font-size:14px;font-weight:600;color:var(--label);text-align:center;line-height:1.2;transition:background .2s}
+.seg a.on{background:var(--card-3);box-shadow:0 2px 8px rgba(0,0,0,.18),inset 0 1px 0 rgba(255,255,255,.08)}
+@media (prefers-color-scheme:light){.seg a.on{background:#fff}}
+.seg + .sec{margin-top:18px}

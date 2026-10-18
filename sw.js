@@ -1,6 +1,6 @@
 // Offline cache for the trip companion. VERSION changes on every rebuild, so phones fetch the new
 // copy the next time they're online and keep working from the cached one when they're not.
-const VERSION = "9afda914ac";
+const VERSION = "77bfa4c8ab";
 const CORE = ["./", "index.html", "app.css", "app.js", "data.bin", "manifest.webmanifest", "icon-180.png", "icon-512.png"];
 
 self.addEventListener("install", (e) => {

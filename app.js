@@ -233,27 +233,54 @@ function useLine(x, today) {
   return strip(x.when).split(" · ")[0];
 }
 function tRow(x, today, used) {
+  if (x.kind === "booked") {
+    const tag = x.href ? "a" : "div";
+    return `<${tag} class="row tkrow lg-${x.leg}${used ? " used" : ""}"${x.href ? ` href="${esc(x.href)}"` : ""} style="--inset:68px"><span class="qt">${ic("check")}</span>
+      <span class="tx"><b>${esc(x.name)}</b><span>${esc((x.when || "").replace(/^[A-Z][a-z]{2} \d{1,2}\s*(·\s*)?/, ""))} · booked, no ticket file</span></span></${tag}>`;
+  }
   const locked = !byTicket.get(x.id);
   return `<a class="row tkrow lg-${x.leg}${used ? " used" : ""}${locked ? " locked" : ""}" href="#/ticket/${x.id}" style="--inset:68px">
     <span class="qt">${ic(KIND_IC[x.kind] || "qr")}</span><span class="tx"><b>${esc(x.name)}</b><span>${esc(useLine(x, today))}</span></span>${ic("right", "ic chev")}</a>`;
 }
+// bookings marked booked but with no ticket file (e.g. the flight home) still belong in the list
+const words = (x) => (x || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(/[^a-z0-9]+/).filter((w) => w.length > 3);
+function bookedOnly() {
+  return D.bookings.filter((b) => b.ok && !b.ticket && !D.tickets.some((t) => {
+    const tw = words(t.name);
+    return (!b.date || !t.date || b.date === t.date || (t.until && b.date >= t.date && b.date <= t.until)) && words(b.what).some((w) => tw.includes(w));
+  })).map((b) => ({ id: null, name: shortWhat(b.what), when: b.when, date: b.date, until: b.date, kind: "booked", leg: b.leg, href: b.href }));
+}
+const shortWhat = (w) => w.split(" · ")[0].replace(/\s*\([^)]*\)/g, "").trim();
+function todoRow(b) {
+  const tag = b.href ? "a" : "div";
+  return `<${tag} class="row tkrow lg-${b.leg} todo-row"${b.href ? ` href="${esc(b.href)}"` : ""} style="--inset:68px"><span class="qt">${ic(b.href ? "ext" : "list")}</span>
+    <span class="tx"><b>${esc(shortWhat(b.what))}</b><span>${esc(b.when.replace(/^[A-Z][a-z]{2} \d{1,2}\s*(·\s*)?/, "") || b.when)}</span></span><span class="badge">${esc(b.status)}</span></${tag}>`;
+}
 function viewTickets() {
-  const t = todayIso(), st = tripState(), all = ticketList();
+  const t = todayIso(), st = tripState(), all = ticketList().concat(bookedOnly().map((x) => ({ ...x, until: x.until || x.date })))
+    .sort((a, b) => (a.date || "").localeCompare(b.date || "") || (mins(a.when) ?? 9999) - (mins(b.when) ?? 9999));
   const live = st === "during";
   const now = live ? all.filter((x) => x.date <= t && t <= x.until) : [];
-  const used = all.filter((x) => x.until < t);
+  const used = all.filter((x) => x.until && x.until < t);
   const next = all.filter((x) => !now.includes(x) && !used.includes(x));
-  let out = `<header class="lt"><div><h1>Tickets</h1><p>${live ? `${now.length} for today` : `${all.length} tickets and bookings`}</p></div>${T ? `<button class="act" data-act="import" aria-label="Update tickets">${ic("down")}</button>` : ""}</header>`;
+  const todo = D.bookings.filter((b) => !b.ok && (!b.date || b.date >= t)).sort((a, b) => (a.date || "9").localeCompare(b.date || "9"));
+  let out = `<header class="lt"><div><h1>Tickets</h1><p>${live ? `${now.length} for today` : `${all.length} booked${todo.length ? ` · ${todo.length} still to book` : ""}`}</p></div>${T ? `<button class="act" data-act="import" aria-label="Update tickets">${ic("down")}</button>` : ""}</header>`;
   if (!T) out += importBlock(false);
   if (now.length) out += `<section class="sec"><div class="sec-h"><h2>Today</h2><span>${fmt(t)}</span></div><div class="list">${now.map((x) => tRow(x, t)).join("")}</div></section>`;
+  if (todo.length) {
+    const g = new Map();
+    todo.forEach((b) => { const k = b.date || ""; if (!g.has(k)) g.set(k, []); g.get(k).push(b); });
+    out += `<section class="sec"><div class="sec-h"><h2>Still to book</h2><span>${todo.length}</span></div>${[...g].map(([date, bs]) =>
+      `<h3 class="dayhead">${date ? fmt(date) : "Any time"}</h3><div class="list">${bs.map(todoRow).join("")}</div>`).join("")}</section>`;
+  }
   if (next.length) {
     const byDate = new Map();
     next.forEach((x) => { if (!byDate.has(x.date)) byDate.set(x.date, []); byDate.get(x.date).push(x); });
-    out += `<section class="sec"><div class="sec-h"><h2>${live ? "Coming up" : "By day"}</h2></div>${[...byDate].map(([date, xs]) =>
+    out += `<section class="sec"><div class="sec-h"><h2>${live ? "Coming up" : "Booked"}</h2></div>${[...byDate].map(([date, xs]) =>
       `<h3 class="dayhead">${fmt(date)}</h3><div class="list">${xs.map((x) => tRow(x)).join("")}</div>`).join("")}</section>`;
   }
   if (used.length) out += `<section class="sec"><div class="sec-h"><h2>Used</h2><span>${used.length}</span></div><div class="list">${used.map((x) => tRow(x, null, true)).join("")}</div></section>`;
-  if (T) out += `<p class="foot" style="margin:16px 22px 0">On this phone only · pack from ${esc(T.built)}</p>`;
+  out += `<p class="foot" style="margin:16px 22px 0">${T ? `Tickets are on this phone only · pack from ${esc(T.built)}. ` : ""}Booking links need internet.</p>`;
   return out;
 }
 
@@ -279,34 +306,26 @@ function viewTicket(id) {
     <p class="foot" style="margin:12px 4px 0">Original PDF: ${esc(tk.file)}</p></div>`;
 }
 
-function viewBookings() {
-  let out = `<header class="lt"><div><h1>Bookings</h1><p>${D.bookings.filter((b) => b.ok).length} of ${D.bookings.length} booked</p></div></header>`;
-  for (const l of D.legs) {
-    const bs = D.bookings.filter((b) => b.leg === l.key);
-    if (!bs.length) continue;
-    out += `<section class="sec lg-${l.key}"><div class="sec-h"><h2><i></i>${esc(l.name)}</h2><span>${bs.filter((b) => b.ok).length}/${bs.length}</span></div><div class="list">${bs.map((b) => {
-      const href = b.ticket ? `#/ticket/${b.ticket}` : b.href;
-      const tag = href ? "a" : "div";
-      return `<${tag} class="row"${href ? ` href="${esc(href)}"` : ""}><span class="tx"><b style="font-size:15.5px">${esc(b.what)}</b><span>${esc(b.when)}</span></span>
-        ${b.ok ? `<span class="badge ok">${ic("check")}Booked</span>` : `<span class="badge">${esc(b.status)}</span>`}</${tag}>`;
-    }).join("")}</div></section>`;
-  }
-  return out + `<p class="foot" style="margin:14px 22px 0">Website links need internet.</p>`;
-}
-
-function viewInfo() {
+const INFO_SEGS = [["hotels", "Hotels"], ["help", "Help"], ["phrases", "Phrases"], ["more", "More"]];
+function viewInfo(seg) {
+  seg = INFO_SEGS.some(([k]) => k === seg) ? seg : "hotels";
   const L = (rows) => `<div class="list">${rows.join("")}</div>`;
-  let out = `<header class="lt"><div><h1>Info</h1><p>Hotels, emergency, phrases</p></div></header>`;
-  out += `<section class="sec"><div class="sec-h"><h2>Hotels</h2></div>${L(D.hotels.map((h) => {
+  let out = `<header class="lt"><div><h1>Info</h1></div></header>
+    <nav class="seg" aria-label="Info sections">${INFO_SEGS.map(([k, n]) => `<a href="#/info/${k}" data-dir="none"${k === seg ? ' class="on" aria-current="page"' : ""}>${n}</a>`).join("")}</nav>`;
+  if (seg === "hotels") {
+  out += `<section class="sec">${L(D.hotels.map((h) => {
     const rng = `${fmt(h.from).slice(4)} – ${fmt(h.to).slice(4)}`;
     return h.name ? `<a class="row" href="${esc(h.url)}" style="--inset:61px"><span class="tile">${ic("bed")}</span><span class="tx"><b>${esc(h.city)} · ${esc(h.name)}</b><span>${rng} · ${esc(h.address)}</span>${h.phone ? `<span>${esc(h.phone)}</span>` : ""}</span>${ic("right", "ic chev")}</a>`
       : `<div class="row" style="--inset:61px"><span class="tile" style="background:var(--card-3)">${ic("bed")}</span><span class="tx"><b>${esc(h.city)}</b><span>${rng} · ${esc(h.note)}</span></span><span class="badge">To add</span></div>`;
   }))}</section>`;
-  out += `<section class="sec"><div class="sec-h"><h2>Emergency</h2></div>${L(D.emergency.map((e) => `<a class="row" href="tel:${esc(e.number)}" style="--inset:61px"><span class="tile" style="background:var(--red)">${ic("phone")}</span><span class="tx"><b>${esc(e.label)}</b>${e.note ? `<span>${esc(e.note)}</span>` : ""}</span><span class="num tnum">${esc(e.number)}</span></a>`)
+  } else if (seg === "help") {
+  out += `<section class="sec">${L(D.emergency.map((e) => `<a class="row" href="tel:${esc(e.number)}" style="--inset:61px"><span class="tile" style="background:var(--red)">${ic("phone")}</span><span class="tx"><b>${esc(e.label)}</b>${e.note ? `<span>${esc(e.note)}</span>` : ""}</span><span class="num tnum">${esc(e.number)}</span></a>`)
     .concat(D.emergencyTodo.map((x) => `<div class="row" style="--inset:61px"><span class="tile" style="background:var(--card-3)">${ic("alert")}</span><span class="tx"><b style="font-size:16px">${esc(x)}</b></span><span class="badge">To add</span></div>`)))}
     <p class="foot">${esc(D.pharmacy)}</p></section>`;
+  } else if (seg === "phrases") {
   out += Object.entries(D.phrases).map(([lang, items], li) => `<section class="sec"><div class="sec-h"><h2>${esc(lang.split(" (")[0])}</h2><span>Tap to show</span></div>${L(items.map(([en, fx], i) =>
     `<a class="row" href="#/say/${li}/${i}" data-dir="push"><span class="tx"><b>${esc(fx)}</b><span>${esc(en)}</span></span>${ic("right", "ic chev")}</a>`))}</section>`).join("");
+  } else {
   out += `<section class="sec"><div class="sec-h"><h2>Maps offline</h2></div>${L(D.tips.map((t) => `<div class="row" style="--inset:61px"><span class="tile" style="background:var(--green)">${ic("map")}</span><span class="tx"><span style="color:var(--label);font-size:15px">${esc(t)}</span></span></div>`))}</section>`;
   const notes = D.legs.flatMap((l) => l.notes.map((n) => `<div class="row"><span class="tx"><span style="color:var(--label-2);font-size:15px">${n}</span></span></div>`));
   if (notes.length) out += `<section class="sec"><div class="sec-h"><h2>Closures &amp; notes</h2></div>${L(notes)}</section>`;
@@ -314,6 +333,7 @@ function viewInfo() {
     `<button class="row" data-act="import" style="--inset:61px"><span class="tile">${ic("down")}</span><span class="tx"><b>${T ? "Update tickets" : "Import tickets"}</b><span>${T ? `Pack from ${esc(T.built)}` : "Ticket pack from the Mac"}</span></span></button>`,
     `<div class="row" style="--inset:61px"><span class="tile" style="background:var(--card-3)">${ic("info")}</span><span class="tx"><b>Plan updated ${esc(D.built)}</b><span>Updates arrive automatically when you're online</span></span></div>`])}
     <p class="credit" style="margin-top:14px">Photos from Unsplash: ${D.credits.map((c) => `${esc(c.what)} — ${esc(c.artist)}, ${esc(c.license)}`).join(" · ")}</p></section>`;
+  }
   return out;
 }
 
@@ -333,8 +353,8 @@ function viewCafes() {
 function viewSay(li, i) {
   const [lang, items] = Object.entries(D.phrases)[+li] || [];
   const p = items && items[+i];
-  if (!p) return viewInfo();
-  return `<div class="say"><a class="gbtn" href="#/info" data-dir="pop" aria-label="Close">${ic("close")}</a><b>${esc(p[1])}</b><span>${esc(p[0])}</span></div>`;
+  if (!p) return viewInfo("phrases");
+  return `<div class="say"><a class="gbtn" href="#/info/phrases" data-dir="pop" aria-label="Close">${ic("close")}</a><b>${esc(p[1])}</b><span>${esc(p[0])}</span></div>`;
 }
 
 /* ---------- router ----------
@@ -342,17 +362,17 @@ function viewSay(li, i) {
    instant and lands where you were. A small LRU keeps memory in check. */
 let navDir = "tab", lastRoute = null, cur = null, lastKey = "#/";
 const screens = new Map();
-const ROOTS = new Set(["#/", "#/tickets", "#/bookings", "#/cafes", "#/info"]);
+const ROOTS = new Set(["#/", "#/tickets", "#/cafes", "#/info"]);
 function route() {
   const parts = (location.hash.replace(/^#\/?/, "").split("?")[0] || "").split("/").filter(Boolean);
   const [name = "home", a, b] = parts;
   return { name, a, b };
 }
 const keyNow = () => (location.hash && location.hash !== "#" ? location.hash : "#/");
-function tabOf(r) { return { home: "days", day: "days", tickets: "tickets", ticket: "tickets", bookings: "bookings", cafes: "cafes", info: "info", say: "info" }[r.name] || "days"; }
+function tabOf(r) { return { home: "days", day: "days", tickets: "tickets", ticket: "tickets", bookings: "tickets", cafes: "cafes", info: "info", say: "info" }[r.name] || "days"; }
 function viewFor(r) {
   return r.name === "day" ? viewDay(r.a) : r.name === "ticket" ? viewTicket(r.a) : r.name === "tickets" ? viewTickets()
-    : r.name === "bookings" ? viewBookings() : r.name === "cafes" ? viewCafes() : r.name === "info" ? viewInfo()
+    : r.name === "bookings" ? viewTickets() : r.name === "cafes" ? viewCafes() : r.name === "info" ? viewInfo(r.a)
     : r.name === "say" ? viewSay(r.a, r.b) : viewHome();
 }
 function invalidate() { screens.forEach((s) => s.el.remove()); screens.clear(); cur = null; }
@@ -363,6 +383,7 @@ function render() {
   const apply = () => {
     if (cur) { cur.scroll = window.scrollY; cur.el.hidden = true; }
     let s = screens.get(key);
+    if (s && !s.el.isConnected) { screens.delete(key); s = null; }  // never show a screen that was removed
     const fresh = !s;
     if (fresh) {
       const el = document.createElement("div");
@@ -388,7 +409,7 @@ function render() {
     $("#tabs").classList.remove("mini");
   };
   document.documentElement.dataset.nav = dir;
-  if (dir !== "none" && document.startViewTransition && !reduce && lastRoute) {
+  if (dir !== "none" && document.startViewTransition && !reduce && lastRoute) {  // pager commits and segment switches draw instantly
     const vt = document.startViewTransition(apply);
     // a quick second tap skips the running animation; that's expected, not an error
     vt.ready.catch(() => {}); vt.finished.catch(() => {}); vt.updateCallbackDone.catch(() => {});
@@ -648,7 +669,7 @@ async function boot() {
   D.tickets.forEach((t) => stubs.set(t.id, t));
   await Promise.all(Object.keys(D.photos).map(async (k) => { D.photos[k] = await blobUrl(D.photos[k]); }));  // decode once, reuse everywhere
   try { const buf = await kv("get", "pack"); if (buf) await setTickets(await unseal(buf)); } catch (_) {}
-  app.innerHTML = "";
+  const bootMark = app.querySelector(".boot"); if (bootMark) bootMark.remove();
   $("#tabs").hidden = false;
   if (!location.hash && tripState() === "during") { const t = byDay.get(todayIso().replace(/-/g, "")); if (t) history.replaceState(null, "", "#/day/" + t.id); }
   render();

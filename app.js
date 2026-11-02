@@ -3,6 +3,7 @@
 "use strict";
 
 const ICONS = {
+  sound: '<path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4.2 4.2 0 0 1 0 6M18.2 6.4a8 8 0 0 1 0 11.2"/>',
   pass: '<path d="M4 7a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v2a2 2 0 0 0 0 4v4a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3v-4a2 2 0 0 0 0-4Z"/><path d="M9.5 4v16" stroke-dasharray="1.5 2.5"/>',
   cal: '<rect x="3.5" y="5" width="17" height="15.5" rx="3.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/><path d="M7.6 13.6h.01M12 13.6h.01M16.4 13.6h.01M7.6 17h.01M12 17h.01"/>',
   train: '<rect x="5" y="3" width="14" height="14" rx="3.5"/><path d="M5 10.5h14M9 20.5l-2 1.5M15 20.5l2 1.5M8.5 13.8h.01M15.5 13.8h.01"/><path d="M8 17l-1.5 2.5M16 17l1.5 2.5"/>',
@@ -117,7 +118,8 @@ function getPhoto(key) {
       const u = URL.createObjectURL(new Blob([plain], { type: "image/webp" }));
       // decoded before it's painted: no hitch (capped, so a stalled decode never leaves a blank photo)
       const im = new Image(); im.src = u; await Promise.race([im.decode().catch(() => {}), new Promise((r) => setTimeout(r, 1500))]);
-      DECODED.push(im); PH.set(key, u); return u;
+      if (!key.includes("-xl-")) DECODED.push(im);  // thumbnails and cards stay decoded; full-size headers are too big to pin
+      PH.set(key, u); return u;
     })
     .catch(() => { PHP.delete(key); return null; }));
   return PHP.get(key);
@@ -174,7 +176,7 @@ function viewHome() {
     const seen = new Set(), slides = D.days.filter((d) => d.photo && photo(d.photo) && !seen.has(d.photo) && seen.add(d.photo));
     const cap = (d) => `${esc((d.place || legName(d.leg)).split(" / ")[0])} · ${esc(fmt(d.date))}`;
     hero = `<a class="hero slideshow lg-${first.leg}" href="#/day/${first.id}"><div class="hero-head"><h1>${esc(D.trip.title)}</h1><p>${esc(D.trip.sub)}</p></div>
-      ${slides.map((d, i) => `<span class="slide${i ? "" : " on"}"${bg(d.photo, "xl")} data-cap="${cap(d)}"></span>`).join("")}
+      ${slides.map((d, i) => `<span class="slide${i ? i === 1 ? " nx" : "" : " on"}"${bg(d.photo, "xl")} data-cap="${cap(d)}"></span>`).join("")}
       <div class="hero-top"><span class="chip-glass">${ic("pin")}<span class="cap">${slides.length ? cap(slides[0]) : ""}</span></span><span class="chip-glass">${n === 1 ? "Tomorrow" : "In " + n + " days"}</span></div>
       <div class="hero-bot"><span class="hero-big tnum">${n}</span><span class="hero-title">${n === 1 ? "day" : "days"} until ${esc(D.trip.title)}</span>
       <span class="hero-sub">${D.legs.map((l) => esc(l.name)).join(" · ")} · ${D.days.length} days</span></div></a>`;
@@ -376,7 +378,7 @@ function viewInfo(seg) {
   out += `<section class="sec">${L(D.emergency.map((e) => `<a class="row" href="tel:${esc(e.number)}" style="--inset:61px"><span class="tile" style="background:var(--red)">${ic("phone")}</span><span class="tx"><b>${esc(e.label)}</b>${e.note ? `<span>${esc(e.note)}</span>` : ""}</span><span class="num tnum">${esc(e.number)}</span></a>`))}
     <p class="foot">${esc(D.pharmacy)}</p></section>`;
   } else if (seg === "phrases") {
-  out += Object.entries(D.phrases).map(([lang, items], li) => `<section class="sec"><div class="sec-h"><h2>${esc(lang.split(" (")[0])}</h2><span>Tap to show</span></div>${L(items.map(([en, fx], i) =>
+  out += Object.entries(D.phrases).map(([lang, items], li) => `<section class="sec"><div class="sec-h"><h2>${esc(lang.split(" (")[0])}</h2></div>${L(items.map(([en, fx], i) =>
     `<a class="row" href="#/say/${li}/${i}" data-dir="push"><span class="tx"><b>${esc(fx)}</b><span>${esc(en)}</span></span>${ic("right", "ic chev")}</a>`))}</section>`).join("");
   }
   return out;
@@ -399,7 +401,40 @@ function viewSay(li, i) {
   const [lang, items] = Object.entries(D.phrases)[+li] || [];
   const p = items && items[+i];
   if (!p) return viewInfo("phrases");
-  return `<div class="say"><a class="gbtn" href="#/info/phrases" data-dir="pop" aria-label="Close">${ic("close")}</a><b>${esc(p[1])}</b><span>${esc(p[0])}</span></div>`;
+  const act = (slow, label) => `<button type="button" class="sayb" data-act="speak" data-li="${+li}" data-i="${+i}"${slow ? ' data-slow="1"' : ""}>${ic("sound")}${label}</button>`;
+  return `<div class="say"><a class="gbtn" href="#/info/phrases" data-dir="pop" aria-label="Close">${ic("close")}</a><b lang="${esc((D.phraseLang || {})[lang] || "")}">${esc(p[1]).replace(/\(([^)]*)\)/g, "<small>($1)</small>")}</b>${p[2] ? `<i class="pron">${esc(p[2])}</i>` : ""}<span>${esc(p[0])}</span>
+    <div class="say-acts">${act(false, "Play")}${act(true, "Slowly")}</div></div>`;
+}
+
+/* Reading a phrase out loud with the phone's own German / French voice (on the device, so it works
+   offline). Notes in brackets aren't read; "A / B" and "A · B" are read as two phrases. */
+let VOICES = [];
+if ("speechSynthesis" in window) {
+  const load = () => { VOICES = speechSynthesis.getVoices(); };
+  load(); speechSynthesis.addEventListener("voiceschanged", load);
+}
+// Apple's character voices (Eddy, Grandma, Rocko…) sound odd for this; prefer the regular ones
+const NOVELTY = /^(eddy|flo|grandma|grandpa|reed|rocko|sandy|shelley|albert|bad news|bahh|bells|boing|bubbles|cellos|good news|jester|organ|superstar|trinoids|whisper|wobble|zarvox)\b/i;
+function voiceFor(lang) {
+  const L = (v) => v.lang.replace("_", "-"), vs = VOICES.filter((v) => L(v).slice(0, 2) === lang.slice(0, 2) && !NOVELTY.test(v.name));
+  return vs.find((v) => L(v) === lang && /premium|enhanced/i.test(v.name + v.voiceURI))
+    || vs.find((v) => L(v) === lang && /^(anna|helena|petra|markus|thomas|audrey|aur[ée]lie|marie)\b/i.test(v.name))  // Apple's main natural voices
+    || vs.find((v) => L(v) === lang && v.localService)
+    || vs.find((v) => L(v) === lang) || vs[0] || null;
+}
+function speak(btn) {
+  if (!("speechSynthesis" in window)) { toast("Read-aloud isn't available here"); return; }
+  const [lang, items] = Object.entries(D.phrases)[+btn.dataset.li] || [], p = items && items[+btn.dataset.i];
+  if (!p) return;
+  speechSynthesis.cancel();
+  $$(".sayb.playing").forEach((x) => x.classList.remove("playing"));
+  const code = (D.phraseLang || {})[lang] || "";
+  const u = new SpeechSynthesisUtterance(p[1].replace(/\([^)]*\)/g, "").split(/\s*[·\/]\s*/).map((x) => x.trim()).filter(Boolean).join(". "));
+  u.lang = code; const v = code && voiceFor(code); if (v) u.voice = v;
+  u.rate = btn.dataset.slow ? 0.6 : 0.9;
+  u.onstart = () => btn.classList.add("playing");
+  u.onend = u.onerror = () => btn.classList.remove("playing");
+  speechSynthesis.speak(u);
 }
 
 /* ---------- search: one box for days, plan steps, tickets, hotels, cafés, phrases, help ----------
@@ -537,7 +572,7 @@ function openSearch() {  // runs inside the tap, so iOS lets the keyboard open
   history.pushState(null, "", "#/search");
   render();
   const inp = cur && cur.el.querySelector("#q");
-  if (inp) { inp.focus(); inp.select(); }
+  if (inp) { inp.focus({ preventScroll: true }); inp.select(); }
 }
 
 /* ---------- router ----------
@@ -588,6 +623,7 @@ function render() {
     if (!fresh) refreshNow();
     $$("#tabs a").forEach((a) => a.classList.toggle("on", a.dataset.tab === tabOf(r)));
     $("#tabs").hidden = r.name === "say" || r.name === "search";
+    if (r.name !== "say" && window.speechSynthesis && speechSynthesis.speaking) speechSynthesis.cancel();  // leaving a phrase stops it
     $("#sbtn").hidden = r.name === "say" || r.name === "search";
     if (focusItem && r.name === "day" && focusItem.split("|")[0] === r.a) {  // came from search: show that exact step
       const li = s.el.querySelectorAll(".sched li")[+focusItem.split("|")[1]];
@@ -648,11 +684,7 @@ document.addEventListener("click", (e) => {
   if (sr) { const inp = cur && cur.el.querySelector("#q"); if (inp) rememberQ(inp.value); if (sr.dataset.focus) focusItem = sr.dataset.focus; }
   const a = e.target.closest("a[href^='#']");
   const tab = a && a.closest("#tabs") ? a : null;
-  if (tab) {  // move the selection pill right away; the screen swap follows instantly
-    const tabs = [...$$("#tabs a")];
-    $$("#tabs a").forEach((x) => x.classList.toggle("on", x === tab));
-    $("#tabs").style.setProperty("--i", tabs.indexOf(tab));
-  }
+  if (tab) { e.preventDefault(); tabGo(tab); return; }
   if (a) {
     const r = route(), to = a.getAttribute("href");
     navDir = a.dataset.dir || (to.startsWith("#/day/") && r.name !== "day" ? "push" : to.startsWith("#/ticket/") ? "push"
@@ -663,6 +695,7 @@ document.addEventListener("click", (e) => {
   const b = e.target.closest("[data-act]");
   if (!b) return;
   if (b.dataset.act === "import") pickPack();
+  if (b.dataset.act === "speak") speak(b);
   if (b.dataset.act === "replacepack") confirmBox({
     title: "Replace ticket pack?", text: "The tickets on this phone will be removed. You can then import a new ticket pack.",
     ok: "Replace", destructive: true, onOk: clearTickets,
@@ -763,6 +796,7 @@ setInterval(() => {  // advance the pre-trip slideshow on the visible home scree
   const sl = [...show.querySelectorAll(".slide")]; if (sl.length < 2) return;
   const i = sl.findIndex((x) => x.classList.contains("on")), nx = sl[(i + 1) % sl.length];
   sl[i].classList.remove("on"); sl[i].classList.add("was");
+  nx.classList.remove("nx"); sl[(i + 2) % sl.length].classList.add("nx");  // the one after starts decoding now
   setTimeout(() => sl[i].classList.remove("was"), 1800);
   nx.classList.add("on");
   const c = show.querySelector(".cap");
@@ -782,6 +816,20 @@ document.addEventListener("visibilitychange", () => {
   if (t !== seenDay) { seenDay = t; invalidate(); navDir = "tab"; go(today ? "#/day/" + today.id : keyNow()); return; }  // new day: rebuild, open today
   seenDay = t; refreshNow();
 });
+
+/* Switching tabs: the selection pill starts gliding first and the new screen is swapped in two
+   frames later (~30 ms). On iPhone the glide then runs by itself while the new screen is drawn,
+   instead of stuttering through it. Tapping the tab you're on scrolls back to the top, as in iOS. */
+function tabGo(a) {
+  const tabs = [...$$("#tabs a")], to = a.getAttribute("href");
+  tabs.forEach((x) => x.classList.toggle("on", x === a));
+  $("#tabs").style.setProperty("--i", tabs.indexOf(a));
+  if (to === keyNow()) { window.scrollTo({ top: 0, behavior: reduce ? "auto" : "smooth" }); return; }
+  let done = false;
+  const swap = () => { if (done) return; done = true; navDir = "tab"; history.pushState(null, "", to); render(); };
+  requestAnimationFrame(() => requestAnimationFrame(swap));
+  setTimeout(swap, 80);  // frames paused (app resuming): don't wait for them
+}
 
 /* ---------- tab bar: press and slide your finger along it, like iOS ---------- */
 (() => {
@@ -816,11 +864,8 @@ document.addEventListener("visibilitychange", () => {
     tabs.forEach((t) => t.classList.remove("hover"));
     bubble.style.transition = ""; bubble.style.transform = "";  // spring back to the CSS position (--i)
     if (cancel || !moved) return;  // a plain tap is handled by the link itself
-    const to = tabs[idxAt(x)];
     eatClick = Date.now();
-    bar.style.setProperty("--i", tabs.indexOf(to));
-    navDir = "tab";
-    if (to.getAttribute("href") !== keyNow()) location.hash = to.getAttribute("href"); else render();
+    tabGo(tabs[idxAt(x)]);
   };
   bar.addEventListener("touchend", (e) => end(e, false), { passive: true });
   bar.addEventListener("touchcancel", (e) => end(e, true), { passive: true });

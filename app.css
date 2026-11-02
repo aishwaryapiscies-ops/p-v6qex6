@@ -429,8 +429,9 @@ html[data-nav=tab]::view-transition-old(root){animation:fadeOut .16s ease-in}
 .sbtn:active{transform:scale(.9);transition-duration:.15s}
 .tabs.mini ~ .sbtn{transform:translate(calc(var(--tw) * -.07), 6px) scale(.86)}
 @media (prefers-reduced-transparency:reduce){.sbtn{background:var(--card-2);-webkit-backdrop-filter:none;backdrop-filter:none}}
-/* search screen */
-.sbar{position:fixed;top:0;left:0;right:0;z-index:50;display:flex;align-items:center;gap:10px;padding:calc(var(--top) + 10px) 16px 10px;background:var(--bg);
+/* search screen. iOS fades the strip just under the status bar in home-screen apps; the field starts below
+   that strip so the fade only ever lies over plain background, never over the field */
+.sbar{position:fixed;top:0;left:0;right:0;z-index:50;display:flex;align-items:center;gap:10px;padding:calc(var(--top) + 34px) 16px 10px;background:var(--bg);
   box-shadow:0 .5px 0 var(--sep)}
 .sfield{flex:1;min-width:0;display:flex;align-items:center;gap:8px;min-height:44px;padding:0 6px 0 12px;border-radius:999px;background:var(--fill);color:var(--label-2)}
 .sfield .ic{width:19px;height:19px;flex:none}
@@ -441,7 +442,7 @@ html[data-nav=tab]::view-transition-old(root){animation:fadeOut .16s ease-in}
 .sclear[hidden]{display:none}
 .sclear .ic{width:16px;height:16px;padding:3px;box-sizing:content-box;border-radius:50%;background:var(--label-3);color:var(--bg);stroke-width:3}
 .scancel{flex:none;min-height:44px;padding:0 4px;color:var(--tint);font-size:17px}
-.sres{padding:calc(var(--top) + 64px) 0 20px}
+.sres{padding:calc(var(--top) + 88px) 0 20px}
 .sres .sec{margin-top:22px}
 .sugg{display:flex;flex-wrap:wrap;gap:8px}
 .sugg button{display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:6px 14px;border-radius:999px;background:var(--fill);color:var(--label);font-size:15px;font-weight:600;line-height:1.2}

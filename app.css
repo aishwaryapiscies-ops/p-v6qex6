@@ -463,3 +463,11 @@ mark{background:color-mix(in srgb,var(--tint) 32%,transparent);color:inherit;bor
 @keyframes alertOut{to{transform:scale(.96);opacity:0}}
 @media (prefers-reduced-motion:reduce){.alert-wrap,.alert,.alert-wrap.out,.alert-wrap.out .alert{animation:none}}
 @media (prefers-reduced-transparency:reduce){.alert{background:var(--card-2);-webkit-backdrop-filter:none;backdrop-filter:none}}
+
+/* update-ready pill, top centre under the status bar */
+.upd{position:fixed;z-index:35;top:calc(var(--top) + 8px);left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:8px;min-height:44px;
+  padding:6px 8px 6px 14px;border-radius:999px;color:var(--label);font-size:15px;font-weight:600;white-space:nowrap;animation:updIn .45s var(--spring)}
+.upd .ic{width:18px;height:18px;color:var(--tint)}
+.upd b{display:inline-flex;align-items:center;min-height:32px;padding:0 14px;border-radius:999px;background:var(--tint);color:#fff;font-weight:700}
+@keyframes updIn{from{transform:translate(-50%,-30px);opacity:0}}
+@media (prefers-reduced-motion:reduce){.upd{animation:none}}

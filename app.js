@@ -88,17 +88,24 @@ async function kv(op, k, v) {
    screen shows them and kept as blob URLs, then the rest are preloaded quietly in the background. */
 const PH = new Map(), PHP = new Map();
 const photo = (slug) => !!(slug && D.photos[slug]);
-const bg = (slug) => {
+// each photo exists at the sizes it's shown at: sm (thumbnails), md (cards), xl (full-screen headers)
+const SIZES = ["sm", "md", "xl"];
+function sizeFor(slug, want) {
+  const have = (D.photoInfo[slug] && D.photoInfo[slug].sizes) || ["xl"];
+  return SIZES.slice(SIZES.indexOf(want)).find((z) => have.includes(z)) || have[have.length - 1];
+}
+const bg = (slug, want = "md") => {
   if (!photo(slug)) return "";
-  const u = PH.get(slug);
-  return ` data-ph="${slug}"${u ? ` style="--img:url('${u}')"` : ""}`;
+  const z = sizeFor(slug, want), info = D.photoInfo[slug];
+  const key = (info.files && info.files[z]) || `${slug}-${z}`, u = PH.get(key);
+  return ` data-ph="${key}"${u ? ` style="--img:url('${u}')"` : ""}`;
 };
-function getPhoto(slug) {
-  if (PH.has(slug)) return Promise.resolve(PH.get(slug));
-  if (!PHP.has(slug)) PHP.set(slug, fetch(`ph/${slug}.bin`).then((r) => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
-    .then(decryptBuf).then((plain) => { const u = URL.createObjectURL(new Blob([plain], { type: "image/jpeg" })); PH.set(slug, u); return u; })
-    .catch(() => { PHP.delete(slug); return null; }));
-  return PHP.get(slug);
+function getPhoto(key) {
+  if (PH.has(key)) return Promise.resolve(PH.get(key));
+  if (!PHP.has(key)) PHP.set(key, fetch(`ph/${key}.bin`).then((r) => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
+    .then(decryptBuf).then((plain) => { const u = URL.createObjectURL(new Blob([plain], { type: "image/webp" })); PH.set(key, u); return u; })
+    .catch(() => { PHP.delete(key); return null; }));
+  return PHP.get(key);
 }
 function hydrate(root) {
   root.querySelectorAll("[data-ph]").forEach((el) => {
@@ -106,8 +113,9 @@ function hydrate(root) {
     getPhoto(el.dataset.ph).then((u) => { if (u) el.style.setProperty("--img", `url('${u}')`); });
   });
 }
-async function preloadPhotos() {
-  const all = Object.keys(D.photos), lanes = 3;
+async function preloadPhotos() {  // small ones first, then cards, then headers
+  const all = SIZES.flatMap((z) => Object.keys(D.photos).map((s) => D.photoInfo[s].files && D.photoInfo[s].files[z]).filter(Boolean));
+  const lanes = 3;
   await Promise.all(Array.from({ length: lanes }, async (_, k) => { for (let i = k; i < all.length; i += lanes) await getPhoto(all[i]); }));
 }
 const areaOf = (slug) => { const i = slug && D.photoInfo && D.photoInfo[slug]; return i && i.area ? i.what : null; };
@@ -135,7 +143,7 @@ function dayCard(d) {
   if (d.drive) meta.push(`<span>${ic("car")}Car</span>`);
   if (d.hol) meta.push(`<span>${esc(d.hol)}</span>`);
   const dd = dObj(d.date);
-  return `<a class="${cls}" href="#/day/${d.id}"${bg(d.photo)}>${d.date === t ? '<span class="today-tag">Today</span>' : ""}
+  return `<a class="${cls}" href="#/day/${d.id}"${bg(d.photo, "md")}>${d.date === t ? '<span class="today-tag">Today</span>' : ""}
     <span class="dbadge"><small>${WD[dd.getDay()]}</small><b>${dd.getDate()}</b></span>
     <span class="dbody"><span class="dtitle">${esc(d.title)}</span><span class="dmeta">${meta.join("")}</span></span></a>`;
 }
@@ -151,19 +159,19 @@ function viewHome() {
     const seen = new Set(), slides = D.days.filter((d) => d.photo && photo(d.photo) && !seen.has(d.photo) && seen.add(d.photo));
     const cap = (d) => `${esc((d.place || legName(d.leg)).split(" / ")[0])} · ${esc(fmt(d.date))}`;
     hero = `<a class="hero slideshow lg-${first.leg}" href="#/day/${first.id}"><div class="hero-head"><h1>${esc(D.trip.title)}</h1><p>${esc(D.trip.sub)}</p></div>
-      ${slides.map((d, i) => `<span class="slide${i ? "" : " on"}"${bg(d.photo)} data-cap="${cap(d)}"></span>`).join("")}
+      ${slides.map((d, i) => `<span class="slide${i ? "" : " on"}"${bg(d.photo, "xl")} data-cap="${cap(d)}"></span>`).join("")}
       <div class="hero-top"><span class="chip-glass">${ic("pin")}<span class="cap">${slides.length ? cap(slides[0]) : ""}</span></span><span class="chip-glass">${n === 1 ? "Tomorrow" : "In " + n + " days"}</span></div>
       <div class="hero-bot"><span class="hero-big tnum">${n}</span><span class="hero-title">${n === 1 ? "day" : "days"} until ${esc(D.trip.title)}</span>
       <span class="hero-sub">${D.legs.map((l) => esc(l.name)).join(" · ")} · ${D.days.length} days</span></div></a>`;
   } else if (st === "during" && today) {
-    hero = `<a class="hero lg-${today.leg}" href="#/day/${today.id}"${bg(today.photo)}><div class="hero-head"><h1>${esc(D.trip.title)}</h1><p>${esc(D.trip.sub)}</p></div>
+    hero = `<a class="hero lg-${today.leg}" href="#/day/${today.id}"${bg(today.photo, "xl")}><div class="hero-head"><h1>${esc(D.trip.title)}</h1><p>${esc(D.trip.sub)}</p></div>
       <div class="hero-top"><span class="chip-glass">${ic("sun")}Today · ${fmt(today.date)}</span><span class="chip-glass">${esc(legName(today.leg))}</span></div>
       <div class="hero-bot"><span class="hero-title">${esc(today.title)}</span><span class="hero-sub">Tap for today's plan</span></div></a>`;
     const nx = nextItem(today);
     if (nx) hero += nextCard(today, nx);
   } else {
     const last = D.days[D.days.length - 1];
-    hero = `<a class="hero lg-${last.leg}" href="#/day/${last.id}"${bg(D.legs[2].photo)}><div class="hero-head"><h1>${esc(D.trip.title)}</h1><p>${esc(D.trip.sub)}</p></div><div class="hero-top"><span class="chip-glass">Trip complete</span></div>
+    hero = `<a class="hero lg-${last.leg}" href="#/day/${last.id}"${bg(D.legs[2].photo, "xl")}><div class="hero-head"><h1>${esc(D.trip.title)}</h1><p>${esc(D.trip.sub)}</p></div><div class="hero-top"><span class="chip-glass">Trip complete</span></div>
       <div class="hero-bot"><span class="hero-title">What a trip</span><span class="hero-sub">Every day is still here</span></div></a>`;
   }
   const nudge = !T ? `<div class="sec"><a class="list" href="#/tickets"><span class="row" style="--inset:61px"><span class="tile" style="background:var(--orange)">${ic("ticket")}</span>
@@ -196,7 +204,7 @@ function viewDay(id) {
   if (!d) return viewHome();
   const i = D.days.indexOf(d), prev = D.days[i - 1], next = D.days[i + 1];
   const p = photo(d.photo), dd = dObj(d.date);
-  let out = `<div class="dhero lg-${d.leg}${p ? "" : " noimg"}"${bg(d.photo)}>
+  let out = `<div class="dhero lg-${d.leg}${p ? "" : " noimg"}"${bg(d.photo, "xl")}>
     <div class="topbar"><a class="gbtn" href="#/" data-dir="pop" aria-label="All days">${ic("left")}</a>
       <span class="nbchip">${prev ? `<a href="#/day/${prev.id}" data-dir="prev">${shortDay(prev)}</a>` : "<i></i>"}<b>${shortDay(d)}</b>${next ? `<a href="#/day/${next.id}" data-dir="next">${shortDay(next)}</a>` : "<i></i>"}</span>
       <a class="gbtn${prev ? "" : " off"}" href="${prev ? "#/day/" + prev.id : "#/"}" data-dir="prev" aria-label="Previous day">${ic("left")}</a>
@@ -218,7 +226,7 @@ function viewDay(id) {
     }).join("")}</div></section>`;
   }
   out += `<section class="sec"><div class="sec-h"><h2>Plan</h2>${d.drive ? `<span>${ic("car", "ic")} Car day</span>` : ""}</div><ol class="sched">${d.items.map((it) => {
-    const places = it.maps.map((m) => `<a class="place" href="${esc(m.url)}"><span class="ph"${bg(m.photo)}>${photo(m.photo) ? "" : ic("pin")}</span>
+    const places = it.maps.map((m) => `<a class="place" href="${esc(m.url)}"><span class="ph"${bg(m.photo, "sm")}>${photo(m.photo) ? "" : ic("pin")}</span>
       <span class="tx"><b>${esc(m.label)}</b><span>${m.drive ? "Drive · works offline" : "Show in Google Maps"}</span></span><span class="go-ic">${ic(m.drive ? "car" : "nav")}</span></a>`).join("");
     return `<li class="${it.go ? "go" : ""}" data-t="${esc(it.t)}"><span class="t tnum">${esc(it.t)}</span><div class="w"><p class="txt">${it.html}</p>${places}</div></li>`;
   }).join("")}</ol></section>`;
@@ -365,7 +373,7 @@ function viewCafes() {
     if (!l.cafes.length) continue;
     out += `<section class="sec lg-${l.key}"><div class="sec-h"><h2><i></i>${esc(l.name)}</h2><span>${l.cafes.length}</span></div><div class="grid2">${l.cafes.map((c) => {
       const p = photo(c.photo);
-      return `<a class="ccard" href="${esc(c.url)}"><span class="ph${p ? "" : " noimg"}"${bg(c.photo)}>${p ? "" : `<b>${esc(c.name.replace(/^(Café|Confiserie|Konditorei) /, "")[0])}</b>`}</span>
+      return `<a class="ccard" href="${esc(c.url)}"><span class="ph${p ? "" : " noimg"}"${bg(c.photo, "md")}>${p ? "" : `<b>${esc(c.name.replace(/^(Café|Confiserie|Konditorei) /, "")[0])}</b>`}</span>
         <span class="tx"><b>${esc(c.name)}</b><span>${esc(c.desc)}${c.when ? " · " + esc(c.when) : ""}</span></span></a>`;
     }).join("")}</div></section>`;
   }
@@ -471,7 +479,7 @@ function sRow(o, q) {
   const icon = o.type === "ticket" ? (KIND_IC[o.kind] || "qr") : o.type === "plan" && o.go ? "route" : TYPE_IC[o.type];
   const ext = /^https?:|^tel:/.test(o.href);
   return `<a class="row srow${o.leg ? " lg-" + o.leg : ""}" href="${esc(o.href)}"${o.focus ? ` data-focus="${o.focus}"` : ""}${ext ? "" : ' data-dir="push"'} style="--inset:68px">
-    <span class="qt${p ? " ph" : ""}"${p ? bg(o.photo) : ""}>${p ? "" : ic(icon)}</span>
+    <span class="qt${p ? " ph" : ""}"${p ? bg(o.photo, "sm") : ""}>${p ? "" : ic(icon)}</span>
     <span class="tx"><b>${hl(o.title, q)}</b><span>${hl(o.sub, q)}</span></span>${ext ? ic("ext", "ic chev") : ic("right", "ic chev")}</a>`;
 }
 function recentQs() { try { return JSON.parse(localStorage.getItem("recentQ") || "[]"); } catch (_) { return []; } }
@@ -797,6 +805,16 @@ document.addEventListener("visibilitychange", () => {
   bar.addEventListener("click", (e) => { if (Date.now() - eatClick < 500) { e.preventDefault(); e.stopPropagation(); } }, true);
 })();
 
+/* ---------- "Update ready" pill: the new version is downloaded and waiting ---------- */
+function showUpdatePill() {
+  if ($("#upd")) return;
+  const el = document.createElement("button");
+  el.id = "upd"; el.type = "button"; el.className = "upd glass";
+  el.innerHTML = `${ic("down")}<span>Update ready</span><b>Reload</b>`;
+  el.addEventListener("click", () => location.reload());
+  document.body.appendChild(el);
+}
+
 /* ---------- iOS-style alert ---------- */
 function confirmBox({ title, text, ok, destructive, onOk }) {
   const back = document.activeElement;
@@ -897,9 +915,11 @@ async function boot() {
   render();
   setTimeout(preloadPhotos, 900);
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("sw.js").catch(() => {});
-    let had = !!navigator.serviceWorker.controller;
-    navigator.serviceWorker.addEventListener("controllerchange", () => { if (had) toast("Trip updated. Reopen the app to see changes."); had = true; });
+    // iOS only checks for a new version on a cold start; also check whenever the app comes back to the front
+    let reg = null, had = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.register("sw.js").then((r) => { reg = r; r.update().catch(() => {}); }).catch(() => {});
+    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && reg) reg.update().catch(() => {}); });
+    navigator.serviceWorker.addEventListener("controllerchange", () => { if (had) showUpdatePill(); had = true; });
   }
 }
 boot();

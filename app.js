@@ -86,7 +86,7 @@ async function kv(op, k, v) {
 /* ---------- helpers ---------- */
 /* Photos ship as separate encrypted full-resolution files (ph/<slug>.bin). They're unlocked when a
    screen shows them and kept as blob URLs, then the rest are preloaded quietly in the background. */
-const PH = new Map(), PHP = new Map();
+const PH = new Map(), PHP = new Map(), DECODED = [];  // keep decoded images alive so they paint instantly
 const photo = (slug) => !!(slug && D.photos[slug]);
 // each photo exists at the sizes it's shown at: sm (thumbnails), md (cards), xl (full-screen headers)
 const SIZES = ["sm", "md", "xl"];
@@ -103,7 +103,12 @@ const bg = (slug, want = "md") => {
 function getPhoto(key) {
   if (PH.has(key)) return Promise.resolve(PH.get(key));
   if (!PHP.has(key)) PHP.set(key, fetch(`ph/${key}.bin`).then((r) => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
-    .then(decryptBuf).then((plain) => { const u = URL.createObjectURL(new Blob([plain], { type: "image/webp" })); PH.set(key, u); return u; })
+    .then(decryptBuf).then(async (plain) => {
+      const u = URL.createObjectURL(new Blob([plain], { type: "image/webp" }));
+      // decoded before it's painted: no hitch (capped, so a stalled decode never leaves a blank photo)
+      const im = new Image(); im.src = u; await Promise.race([im.decode().catch(() => {}), new Promise((r) => setTimeout(r, 1500))]);
+      DECODED.push(im); PH.set(key, u); return u;
+    })
     .catch(() => { PHP.delete(key); return null; }));
   return PHP.get(key);
 }
@@ -326,7 +331,7 @@ function viewTickets() {
 function viewTicket(id) {
   const stub = stubs.get(id), tk = byTicket.get(id);
   const day = D.days.find((d) => d.tickets.includes(id));
-  const leg = day ? day.leg : "munich";
+  const leg = day ? day.leg : D.legs[0].key;
   const back = `<div class="topbar"><a class="gbtn" href="${day && location.hash.includes("from=day") ? "#/day/" + day.id : "#/tickets"}" data-dir="pop" aria-label="Back">${ic("left")}</a><span class="sp"></span>${day ? `<a class="btn" href="#/day/${day.id}" data-dir="push">${fmt(day.date)}</a>` : ""}</div>`;
   if (!tk) return `<div class="tv">${back}</div><header class="lt" style="padding-top:4px"><div><h1>${esc(stub ? stub.name : "Ticket")}</h1><p>${esc(stub ? stub.when : "")}</p></div></header>${importBlock(false)}`;
   const n = tk.codes.length;
@@ -505,7 +510,7 @@ function searchResults(q) {
   }).join("");
 }
 function viewSearch() {
-  return `<div class="sbar"><label class="sfield">${ic("search")}<input id="q" type="search" placeholder="Days, places, tickets, hotels…" enterkeyhint="search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" aria-label="Search the trip"><button type="button" class="sclear" data-act="clearq" aria-label="Clear" hidden>${ic("close")}</button></label>
+  return `<div class="sbar"><label class="sfield">${ic("search")}<input id="q" type="search" placeholder="Search" enterkeyhint="search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" aria-label="Search the trip"><button type="button" class="sclear" data-act="clearq" aria-label="Clear" hidden>${ic("close")}</button></label>
     <button type="button" class="scancel" data-act="cancelsearch">Cancel</button></div><div class="sres" id="sres">${searchResults("")}</div>`;
 }
 function wireSearch(el) {
@@ -592,7 +597,8 @@ function render() {
     $("#tabs").classList.remove("mini");
   };
   document.documentElement.dataset.nav = dir;
-  if (dir !== "none" && document.startViewTransition && !reduce && lastRoute) {  // pager commits and segment switches draw instantly
+  // tab switches, segment switches and pager commits draw instantly (as in Apple's apps); only drilling in/out animates
+  if (dir !== "none" && dir !== "tab" && document.startViewTransition && !reduce && lastRoute) {
     // the swap waits for the next frame; if frames are paused (app just resumed, pane hidden), don't wait
     let ran = false;
     const once = () => { if (!ran) { ran = true; apply(); } };
@@ -631,6 +637,12 @@ document.addEventListener("click", (e) => {
   const sr = e.target.closest(".srow");
   if (sr) { const inp = cur && cur.el.querySelector("#q"); if (inp) rememberQ(inp.value); if (sr.dataset.focus) focusItem = sr.dataset.focus; }
   const a = e.target.closest("a[href^='#']");
+  const tab = a && a.closest("#tabs") ? a : null;
+  if (tab) {  // move the selection pill right away; the screen swap follows instantly
+    const tabs = [...$$("#tabs a")];
+    $$("#tabs a").forEach((x) => x.classList.toggle("on", x === tab));
+    $("#tabs").style.setProperty("--i", tabs.indexOf(tab));
+  }
   if (a) {
     const r = route(), to = a.getAttribute("href");
     navDir = a.dataset.dir || (to.startsWith("#/day/") && r.name !== "day" ? "push" : to.startsWith("#/ticket/") ? "push"

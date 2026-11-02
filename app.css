@@ -444,3 +444,22 @@ mark{background:color-mix(in srgb,var(--tint) 32%,transparent);color:inherit;bor
 .sched li.flash{animation:flash 2s ease-out}
 @keyframes flash{0%,35%{background:color-mix(in srgb,var(--leg) 34%,transparent)}100%{background:transparent}}
 @media (prefers-reduced-motion:reduce){.sched li.flash{animation:none;background:color-mix(in srgb,var(--leg) 22%,transparent)}}
+
+/* iOS 26-style alert: centred glass card, capsule buttons */
+.alert-wrap{position:fixed;inset:0;z-index:40;display:grid;place-items:center;padding:24px;background:rgba(0,0,0,.42);animation:fadeIn .18s ease-out}
+.alert-wrap.out{animation:fadeOut .16s ease-in forwards}
+.alert{width:min(300px,100%);padding:22px 18px 16px;border-radius:34px;text-align:center;display:flex;flex-direction:column;gap:6px;
+  --glass:rgba(40,40,44,.72);animation:alertIn .32s var(--spring)}
+@media (prefers-color-scheme:light){.alert{--glass:rgba(250,250,252,.82)}}
+.alert h2{font-size:17px;font-weight:700;line-height:1.3}
+.alert p{font-size:14px;line-height:1.4;color:var(--label-2)}
+.alert-btns{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+.ab{min-height:48px;padding:6px 12px;border-radius:999px;background:var(--fill);color:var(--label);font-size:17px;font-weight:600;line-height:1.2}
+.ab:active{transform:scale(.96)}
+.ab.primary{background:var(--tint);color:#fff}
+.ab.danger{background:var(--red);color:#fff}
+.alert-wrap.out .alert{animation:alertOut .16s ease-in forwards}
+@keyframes alertIn{from{transform:scale(1.12);opacity:0}}
+@keyframes alertOut{to{transform:scale(.96);opacity:0}}
+@media (prefers-reduced-motion:reduce){.alert-wrap,.alert,.alert-wrap.out,.alert-wrap.out .alert{animation:none}}
+@media (prefers-reduced-transparency:reduce){.alert{background:var(--card-2);-webkit-backdrop-filter:none;backdrop-filter:none}}

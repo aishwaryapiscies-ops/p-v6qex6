@@ -7,6 +7,7 @@ const ICONS = {
   cal: '<rect x="3.5" y="5" width="17" height="15.5" rx="3.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/><path d="M7.6 13.6h.01M12 13.6h.01M16.4 13.6h.01M7.6 17h.01M12 17h.01"/>',
   train: '<rect x="5" y="3" width="14" height="14" rx="3.5"/><path d="M5 10.5h14M9 20.5l-2 1.5M15 20.5l2 1.5M8.5 13.8h.01M15.5 13.8h.01"/><path d="M8 17l-1.5 2.5M16 17l1.5 2.5"/>',
   search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/>',
+  swap: '<path d="M4 9.5h13.5L14 6M20 14.5H6.5L10 18"/>',
   ticket: '<path d="M3 9V7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a3 3 0 0 0 0 6v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a3 3 0 0 0 0-6Z"/><path d="M14 5v2.5M14 11v2M14 16.5V19"/>',
   list: '<path d="M9 6.5h11M9 12h11M9 17.5h11"/><path d="m3.5 6.5 1.3 1.3 2.2-2.6M3.5 12l1.3 1.3L7 10.7M3.5 17.5l1.3 1.3L7 16.2"/>',
   info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.6v.1"/>',
@@ -76,7 +77,8 @@ async function kv(op, k, v) {
   const db = await idb();
   return new Promise((res, rej) => {
     const tx = db.transaction("kv", op === "get" ? "readonly" : "readwrite");
-    const q = op === "get" ? tx.objectStore("kv").get(k) : tx.objectStore("kv").put(v, k);
+    const st = tx.objectStore("kv");
+    const q = op === "get" ? st.get(k) : op === "delete" ? st.delete(k) : st.put(v, k);
     q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error);
   });
 }
@@ -293,7 +295,7 @@ function viewTickets() {
   const used = all.filter((x) => x.until && x.until < t);
   const next = all.filter((x) => !now.includes(x) && !used.includes(x));
   const todo = D.bookings.filter((b) => !b.ok && (!b.date || b.date >= t)).sort((a, b) => (a.date || "9").localeCompare(b.date || "9"));
-  let out = `<header class="lt"><div><h1>Tickets</h1><p>${live ? `${now.length} for today` : `${all.length} booked${todo.length ? ` · ${todo.length} still to book` : ""}`}</p></div>${T ? `<button class="act" data-act="import" aria-label="Update tickets">${ic("down")}</button>` : ""}</header>`;
+  let out = `<header class="lt"><div><h1>Tickets</h1><p>${live ? `${now.length} for today` : `${all.length} booked${todo.length ? ` · ${todo.length} still to book` : ""}`}</p></div>${T ? `<button class="act" data-act="replacepack" aria-label="Replace ticket pack">${ic("swap")}</button>` : ""}</header>`;
   if (!T) out += importBlock(false);
   if (now.length) out += `<section class="sec"><div class="sec-h"><h2>Today</h2><span>${fmt(t)}</span></div><div class="list">${now.map((x) => tRow(x, t)).join("")}</div></section>`;
   if (todo.length) {
@@ -631,6 +633,10 @@ document.addEventListener("click", (e) => {
   const b = e.target.closest("[data-act]");
   if (!b) return;
   if (b.dataset.act === "import") pickPack();
+  if (b.dataset.act === "replacepack") confirmBox({
+    title: "Replace ticket pack?", text: "The tickets on this phone will be removed. You can then import a new ticket pack.",
+    ok: "Replace", destructive: true, onOk: clearTickets,
+  });
   if (b.dataset.act === "q" || b.dataset.act === "clearq") {
     const inp = cur && cur.el.querySelector("#q");
     if (inp) { inp.value = b.dataset.act === "q" ? b.dataset.v : ""; cur.el._draw(); if (b.dataset.act === "clearq") inp.focus(); }
@@ -790,6 +796,35 @@ document.addEventListener("visibilitychange", () => {
   bar.addEventListener("touchcancel", (e) => end(e, true), { passive: true });
   bar.addEventListener("click", (e) => { if (Date.now() - eatClick < 500) { e.preventDefault(); e.stopPropagation(); } }, true);
 })();
+
+/* ---------- iOS-style alert ---------- */
+function confirmBox({ title, text, ok, destructive, onOk }) {
+  const back = document.activeElement;
+  const wrap = document.createElement("div");
+  wrap.className = "alert-wrap";
+  wrap.innerHTML = `<div class="alert glass" role="alertdialog" aria-modal="true" aria-labelledby="al-t" aria-describedby="al-d">
+    <h2 id="al-t">${esc(title)}</h2><p id="al-d">${esc(text)}</p>
+    <div class="alert-btns"><button type="button" class="ab" data-r="0">Cancel</button><button type="button" class="ab${destructive ? " danger" : " primary"}" data-r="1">${esc(ok)}</button></div></div>`;
+  const close = (yes) => {
+    wrap.classList.add("out");
+    document.removeEventListener("keydown", onKey);
+    setTimeout(() => wrap.remove(), reduce ? 0 : 180);
+    if (back && back.focus) back.focus();
+    if (yes) onOk();
+  };
+  const onKey = (e) => { if (e.key === "Escape") close(false); };
+  wrap.addEventListener("click", (e) => { const btn = e.target.closest("[data-r]"); if (btn) close(btn.dataset.r === "1"); else if (e.target === wrap) close(false); });
+  document.addEventListener("keydown", onKey);
+  document.body.appendChild(wrap);
+  wrap.querySelector('[data-r="0"]').focus();
+}
+async function clearTickets() {
+  try { await kv("delete", "pack"); } catch (_) {}
+  ticketUrls.forEach((u) => URL.revokeObjectURL(u)); ticketUrls = [];
+  T = null; byTicket.clear(); INDEX = null;
+  invalidate(); navDir = "none"; go("#/tickets");
+  toast("Ticket pack removed from this phone");
+}
 
 /* ---------- ticket pack import ---------- */
 function pickPack() {

@@ -983,11 +983,29 @@ async function boot() {
   render();
   setTimeout(preloadPhotos, 900);
   if ("serviceWorker" in navigator) {
-    // iOS only checks for a new version on a cold start; also check whenever the app comes back to the front
-    let reg = null, had = !!navigator.serviceWorker.controller;
-    navigator.serviceWorker.register("sw.js").then((r) => { reg = r; r.update().catch(() => {}); }).catch(() => {});
-    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && reg) reg.update().catch(() => {}); });
-    navigator.serviceWorker.addEventListener("controllerchange", () => { if (had) showUpdatePill(); had = true; });
+    // Every build stamps its version into the page. iOS checks for a new version on a cold start; we also
+    // check whenever the app comes back to the front. When the newest installed version isn't the one on
+    // screen: while the app is just opening (nothing tapped yet) it reloads straight into it, otherwise the
+    // "Update ready" pill appears. Comparing versions, rather than waiting for an event, means an update
+    // that lands in the middle of start-up is never missed.
+    const mine = (document.querySelector('meta[name="app-version"]') || {}).content || "";
+    let reg = null, touched = false;
+    addEventListener("pointerdown", () => { touched = true; }, { once: true, capture: true });
+    const check = async () => {
+      if (!mine || mine.startsWith("__") || !navigator.serviceWorker.controller) return;
+      const keys = await caches.keys().catch(() => []);
+      if (!keys.length || keys.includes(mine)) return;  // what's on screen is the newest
+      let again = false;
+      try { again = sessionStorage.getItem("upd") === mine; sessionStorage.setItem("upd", mine); } catch (_) {}
+      if (!touched && performance.now() < 10000 && !again) location.reload(); else showUpdatePill();
+    };
+    const watch = (r) => r.addEventListener("updatefound", () => {
+      const w = r.installing;
+      if (w) w.addEventListener("statechange", () => { if (w.state === "activated") check(); });
+    });
+    navigator.serviceWorker.register("sw.js").then((r) => { reg = r; watch(r); r.update().catch(() => {}).finally(check); }).catch(() => {});
+    navigator.serviceWorker.addEventListener("controllerchange", check);
+    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && reg) reg.update().catch(() => {}).finally(check); });
   }
 }
 boot();

@@ -66,12 +66,21 @@ async function unseal(buf) {
 }
 
 /* ---------- local ticket storage (IndexedDB, this phone only) ---------- */
-function idb() {
+function idb(name = "companion") {
   return new Promise((res, rej) => {
-    const r = indexedDB.open("europe-trip", 1);
+    const r = indexedDB.open(name, 1);
     r.onupgradeneeded = () => r.result.createObjectStore("kv");
     r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
   });
+}
+// earlier builds stored the pack under a name that gave the trip away: move it over once
+async function migrateStore() {
+  if (!indexedDB.databases || !(await indexedDB.databases()).some((d) => d.name === "europe-trip")) return;
+  const old = await idb("europe-trip");
+  const buf = await new Promise((res) => { const q = old.transaction("kv").objectStore("kv").get("pack"); q.onsuccess = () => res(q.result); q.onerror = () => res(null); });
+  old.close();
+  if (buf && !(await kv("get", "pack"))) await kv("put", "pack", buf);
+  indexedDB.deleteDatabase("europe-trip");
 }
 async function kv(op, k, v) {
   const db = await idb();
@@ -919,6 +928,7 @@ async function boot() {
   document.querySelector('meta[name="apple-mobile-web-app-title"]').setAttribute("content", D.trip.name);
   D.days.forEach((d) => byDay.set(d.id, d));
   D.tickets.forEach((t) => stubs.set(t.id, t));
+  try { await migrateStore(); } catch (_) {}
   try { const buf = await kv("get", "pack"); if (buf) await setTickets(await unseal(buf)); } catch (_) {}
   const bootMark = app.querySelector(".boot"); if (bootMark) bootMark.remove();
   $("#tabs").hidden = false;

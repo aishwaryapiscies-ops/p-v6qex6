@@ -75,12 +75,13 @@ function idb(name = "companion") {
 }
 // earlier builds stored the pack under a name that gave the trip away: move it over once
 async function migrateStore() {
-  if (!indexedDB.databases || !(await indexedDB.databases()).some((d) => d.name === "europe-trip")) return;
-  const old = await idb("europe-trip");
+  const OLD = atob("ZXVyb3BlLXRyaXA=");
+  if (!indexedDB.databases || !(await indexedDB.databases()).some((d) => d.name === OLD)) return;
+  const old = await idb(OLD);
   const buf = await new Promise((res) => { const q = old.transaction("kv").objectStore("kv").get("pack"); q.onsuccess = () => res(q.result); q.onerror = () => res(null); });
   old.close();
   if (buf && !(await kv("get", "pack"))) await kv("put", "pack", buf);
-  indexedDB.deleteDatabase("europe-trip");
+  indexedDB.deleteDatabase(OLD);
 }
 async function kv(op, k, v) {
   const db = await idb();

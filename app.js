@@ -6,6 +6,7 @@ const ICONS = {
   pass: '<path d="M4 7a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v2a2 2 0 0 0 0 4v4a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3v-4a2 2 0 0 0 0-4Z"/><path d="M9.5 4v16" stroke-dasharray="1.5 2.5"/>',
   cal: '<rect x="3.5" y="5" width="17" height="15.5" rx="3.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/><path d="M7.6 13.6h.01M12 13.6h.01M16.4 13.6h.01M7.6 17h.01M12 17h.01"/>',
   train: '<rect x="5" y="3" width="14" height="14" rx="3.5"/><path d="M5 10.5h14M9 20.5l-2 1.5M15 20.5l2 1.5M8.5 13.8h.01M15.5 13.8h.01"/><path d="M8 17l-1.5 2.5M16 17l1.5 2.5"/>',
+  search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/>',
   ticket: '<path d="M3 9V7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a3 3 0 0 0 0 6v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a3 3 0 0 0 0-6Z"/><path d="M14 5v2.5M14 11v2M14 16.5V19"/>',
   list: '<path d="M9 6.5h11M9 12h11M9 17.5h11"/><path d="m3.5 6.5 1.3 1.3 2.2-2.6M3.5 12l1.3 1.3L7 10.7M3.5 17.5l1.3 1.3L7 16.2"/>',
   info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.6v.1"/>',
@@ -51,10 +52,14 @@ const byDay = new Map(), byTicket = new Map(), stubs = new Map();
 
 /* ---------- crypto ---------- */
 function b64u(s) { s = s.replace(/-/g, "+").replace(/_/g, "/"); while (s.length % 4) s += "="; return Uint8Array.from(atob(s), (c) => c.charCodeAt(0)); }
-async function unseal(buf) {
-  const key = await crypto.subtle.importKey("raw", b64u(KEY), "AES-GCM", false, ["decrypt"]);
+let keyObj = null, keyFor = null;
+async function decryptBuf(buf) {
+  if (keyFor !== KEY) { keyObj = await crypto.subtle.importKey("raw", b64u(KEY), "AES-GCM", false, ["decrypt"]); keyFor = KEY; }
   const bytes = new Uint8Array(buf);
-  const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: bytes.slice(0, 12) }, key, bytes.slice(12));
+  return crypto.subtle.decrypt({ name: "AES-GCM", iv: bytes.slice(0, 12) }, keyObj, bytes.slice(12));
+}
+async function unseal(buf) {
+  const plain = await decryptBuf(buf);
   const text = await new Response(new Blob([plain]).stream().pipeThrough(new DecompressionStream("gzip"))).text();
   return JSON.parse(text);
 }
@@ -77,8 +82,32 @@ async function kv(op, k, v) {
 }
 
 /* ---------- helpers ---------- */
-const photo = (slug) => (slug && D.photos[slug]) || null;
-const bg = (slug) => { const p = photo(slug); return p ? ` style="--img:url('${p}')"` : ""; };
+/* Photos ship as separate encrypted full-resolution files (ph/<slug>.bin). They're unlocked when a
+   screen shows them and kept as blob URLs, then the rest are preloaded quietly in the background. */
+const PH = new Map(), PHP = new Map();
+const photo = (slug) => !!(slug && D.photos[slug]);
+const bg = (slug) => {
+  if (!photo(slug)) return "";
+  const u = PH.get(slug);
+  return ` data-ph="${slug}"${u ? ` style="--img:url('${u}')"` : ""}`;
+};
+function getPhoto(slug) {
+  if (PH.has(slug)) return Promise.resolve(PH.get(slug));
+  if (!PHP.has(slug)) PHP.set(slug, fetch(`ph/${slug}.bin`).then((r) => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
+    .then(decryptBuf).then((plain) => { const u = URL.createObjectURL(new Blob([plain], { type: "image/jpeg" })); PH.set(slug, u); return u; })
+    .catch(() => { PHP.delete(slug); return null; }));
+  return PHP.get(slug);
+}
+function hydrate(root) {
+  root.querySelectorAll("[data-ph]").forEach((el) => {
+    if (el.style.getPropertyValue("--img")) return;
+    getPhoto(el.dataset.ph).then((u) => { if (u) el.style.setProperty("--img", `url('${u}')`); });
+  });
+}
+async function preloadPhotos() {
+  const all = Object.keys(D.photos), lanes = 3;
+  await Promise.all(Array.from({ length: lanes }, async (_, k) => { for (let i = k; i < all.length; i += lanes) await getPhoto(all[i]); }));
+}
 const areaOf = (slug) => { const i = slug && D.photoInfo && D.photoInfo[slug]; return i && i.area ? i.what : null; };
 const legName = (k) => (D.legs.find((l) => l.key === k) || {}).name || "";
 function tripState() {
@@ -91,7 +120,7 @@ function nextItem(day) {
   return day.items.find((i) => { const m = mins(i.t); return m != null && m + 20 >= n; }) || null;
 }
 function toast(msg) { const t = $("#toast"); t.textContent = msg; t.classList.add("on"); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove("on"), 2600); }
-const plain = (html) => html.replace(/<[^>]+>/g, "");
+const plain = (html) => { const d = document.createElement("div"); d.innerHTML = html; return d.textContent; };  // tags out, &amp; → &
 
 /* ---------- views ---------- */
 function dayCard(d) {
@@ -120,7 +149,7 @@ function viewHome() {
     const seen = new Set(), slides = D.days.filter((d) => d.photo && photo(d.photo) && !seen.has(d.photo) && seen.add(d.photo));
     const cap = (d) => `${esc((d.place || legName(d.leg)).split(" / ")[0])} · ${esc(fmt(d.date))}`;
     hero = `<a class="hero slideshow lg-${first.leg}" href="#/day/${first.id}"><div class="hero-head"><h1>${esc(D.trip.title)}</h1><p>${esc(D.trip.sub)}</p></div>
-      ${slides.map((d, i) => `<span class="slide${i ? "" : " on"}" style="--img:url('${photo(d.photo)}')" data-cap="${cap(d)}"></span>`).join("")}
+      ${slides.map((d, i) => `<span class="slide${i ? "" : " on"}"${bg(d.photo)} data-cap="${cap(d)}"></span>`).join("")}
       <div class="hero-top"><span class="chip-glass">${ic("pin")}<span class="cap">${slides.length ? cap(slides[0]) : ""}</span></span><span class="chip-glass">${n === 1 ? "Tomorrow" : "In " + n + " days"}</span></div>
       <div class="hero-bot"><span class="hero-big tnum">${n}</span><span class="hero-title">${n === 1 ? "day" : "days"} until ${esc(D.trip.title)}</span>
       <span class="hero-sub">${D.legs.map((l) => esc(l.name)).join(" · ")} · ${D.days.length} days</span></div></a>`;
@@ -154,7 +183,7 @@ function nextCard(day, it, onDay) {
   const place = it.maps[0];
   const tk = day.tickets[0];
   return `<div class="next lg-${day.leg}"><div class="next-row"><span class="next-time tnum">${esc(it.t)}<small>${when}</small></span>
-    <span class="next-what">${plain(it.html)}</span></div><div class="btnrow">
+    <span class="next-what">${esc(plain(it.html))}</span></div><div class="btnrow">
     ${place ? `<a class="btn leg" href="${esc(place.url)}">${ic(place.drive ? "car" : "nav")}${place.drive ? "Drive" : "Directions"}</a>` : ""}
     ${tk ? `<a class="btn leg" href="#/ticket/${tk}">${ic("qr")}Ticket</a>` : ""}${onDay ? "" : `<a class="btn leg" href="#/day/${day.id}">Full day</a>`}</div></div>`;
 }
@@ -188,7 +217,7 @@ function viewDay(id) {
   }
   out += `<section class="sec"><div class="sec-h"><h2>Plan</h2>${d.drive ? `<span>${ic("car", "ic")} Car day</span>` : ""}</div><ol class="sched">${d.items.map((it) => {
     const places = it.maps.map((m) => `<a class="place" href="${esc(m.url)}"><span class="ph"${bg(m.photo)}>${photo(m.photo) ? "" : ic("pin")}</span>
-      <span class="tx"><b>${esc(m.label)}</b><span>${m.drive ? "Drive · works offline" : "Show in Google Maps"}</span>${areaOf(m.photo) ? `<span class="phnote">Photo: ${esc(areaOf(m.photo))}</span>` : ""}</span><span class="go-ic">${ic(m.drive ? "car" : "nav")}</span></a>`).join("");
+      <span class="tx"><b>${esc(m.label)}</b><span>${m.drive ? "Drive · works offline" : "Show in Google Maps"}</span></span><span class="go-ic">${ic(m.drive ? "car" : "nav")}</span></a>`).join("");
     return `<li class="${it.go ? "go" : ""}" data-t="${esc(it.t)}"><span class="t tnum">${esc(it.t)}</span><div class="w"><p class="txt">${it.html}</p>${places}</div></li>`;
   }).join("")}</ol></section>`;
   if (d.todos.length) {
@@ -306,7 +335,7 @@ function viewTicket(id) {
     <p class="foot" style="margin:12px 4px 0">Original PDF: ${esc(tk.file)}</p></div>`;
 }
 
-const INFO_SEGS = [["hotels", "Hotels"], ["help", "Help"], ["phrases", "Phrases"], ["more", "More"]];
+const INFO_SEGS = [["hotels", "Hotels"], ["help", "Help"], ["phrases", "Phrases"]];
 function viewInfo(seg) {
   seg = INFO_SEGS.some(([k]) => k === seg) ? seg : "hotels";
   const L = (rows) => `<div class="list">${rows.join("")}</div>`;
@@ -319,20 +348,11 @@ function viewInfo(seg) {
       : `<div class="row" style="--inset:61px"><span class="tile" style="background:var(--card-3)">${ic("bed")}</span><span class="tx"><b>${esc(h.city)}</b><span>${rng} · ${esc(h.note)}</span></span><span class="badge">To add</span></div>`;
   }))}</section>`;
   } else if (seg === "help") {
-  out += `<section class="sec">${L(D.emergency.map((e) => `<a class="row" href="tel:${esc(e.number)}" style="--inset:61px"><span class="tile" style="background:var(--red)">${ic("phone")}</span><span class="tx"><b>${esc(e.label)}</b>${e.note ? `<span>${esc(e.note)}</span>` : ""}</span><span class="num tnum">${esc(e.number)}</span></a>`)
-    .concat(D.emergencyTodo.map((x) => `<div class="row" style="--inset:61px"><span class="tile" style="background:var(--card-3)">${ic("alert")}</span><span class="tx"><b style="font-size:16px">${esc(x)}</b></span><span class="badge">To add</span></div>`)))}
+  out += `<section class="sec">${L(D.emergency.map((e) => `<a class="row" href="tel:${esc(e.number)}" style="--inset:61px"><span class="tile" style="background:var(--red)">${ic("phone")}</span><span class="tx"><b>${esc(e.label)}</b>${e.note ? `<span>${esc(e.note)}</span>` : ""}</span><span class="num tnum">${esc(e.number)}</span></a>`))}
     <p class="foot">${esc(D.pharmacy)}</p></section>`;
   } else if (seg === "phrases") {
   out += Object.entries(D.phrases).map(([lang, items], li) => `<section class="sec"><div class="sec-h"><h2>${esc(lang.split(" (")[0])}</h2><span>Tap to show</span></div>${L(items.map(([en, fx], i) =>
     `<a class="row" href="#/say/${li}/${i}" data-dir="push"><span class="tx"><b>${esc(fx)}</b><span>${esc(en)}</span></span>${ic("right", "ic chev")}</a>`))}</section>`).join("");
-  } else {
-  out += `<section class="sec"><div class="sec-h"><h2>Maps offline</h2></div>${L(D.tips.map((t) => `<div class="row" style="--inset:61px"><span class="tile" style="background:var(--green)">${ic("map")}</span><span class="tx"><span style="color:var(--label);font-size:15px">${esc(t)}</span></span></div>`))}</section>`;
-  const notes = D.legs.flatMap((l) => l.notes.map((n) => `<div class="row"><span class="tx"><span style="color:var(--label-2);font-size:15px">${n}</span></span></div>`));
-  if (notes.length) out += `<section class="sec"><div class="sec-h"><h2>Closures &amp; notes</h2></div>${L(notes)}</section>`;
-  out += `<section class="sec"><div class="sec-h"><h2>This app</h2></div>${L([
-    `<button class="row" data-act="import" style="--inset:61px"><span class="tile">${ic("down")}</span><span class="tx"><b>${T ? "Update tickets" : "Import tickets"}</b><span>${T ? `Pack from ${esc(T.built)}` : "Ticket pack from the Mac"}</span></span></button>`,
-    `<div class="row" style="--inset:61px"><span class="tile" style="background:var(--card-3)">${ic("info")}</span><span class="tx"><b>Plan updated ${esc(D.built)}</b><span>Updates arrive automatically when you're online</span></span></div>`])}
-    <p class="credit" style="margin-top:14px">Photos from Unsplash: ${D.credits.map((c) => `${esc(c.what)} — ${esc(c.artist)}, ${esc(c.license)}`).join(" · ")}</p></section>`;
   }
   return out;
 }
@@ -343,7 +363,7 @@ function viewCafes() {
     if (!l.cafes.length) continue;
     out += `<section class="sec lg-${l.key}"><div class="sec-h"><h2><i></i>${esc(l.name)}</h2><span>${l.cafes.length}</span></div><div class="grid2">${l.cafes.map((c) => {
       const p = photo(c.photo);
-      return `<a class="ccard" href="${esc(c.url)}"><span class="ph${p ? "" : " noimg"}"${bg(c.photo)}>${p ? (areaOf(c.photo) ? `<span class="phcap">Photo: ${esc(areaOf(c.photo))}</span>` : "") : `<b>${esc(c.name.replace(/^(Café|Confiserie|Konditorei) /, "")[0])}</b>`}</span>
+      return `<a class="ccard" href="${esc(c.url)}"><span class="ph${p ? "" : " noimg"}"${bg(c.photo)}>${p ? "" : `<b>${esc(c.name.replace(/^(Café|Confiserie|Konditorei) /, "")[0])}</b>`}</span>
         <span class="tx"><b>${esc(c.name)}</b><span>${esc(c.desc)}${c.when ? " · " + esc(c.when) : ""}</span></span></a>`;
     }).join("")}</div></section>`;
   }
@@ -355,6 +375,142 @@ function viewSay(li, i) {
   const p = items && items[+i];
   if (!p) return viewInfo("phrases");
   return `<div class="say"><a class="gbtn" href="#/info/phrases" data-dir="pop" aria-label="Close">${ic("close")}</a><b>${esc(p[1])}</b><span>${esc(p[0])}</span></div>`;
+}
+
+/* ---------- search: one box for days, plan steps, tickets, hotels, cafés, phrases, help ----------
+   Accent- and case-insensitive word-prefix matching; every word you type must match somewhere.
+   Dates work as you'd say them: "26", "26 dec", "christmas", "friday", "today", "tomorrow". */
+const norm = (x) => String(x || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/ß/g, "ss")
+  .replace(/[^a-z0-9:./€+ ]+/g, " ").replace(/\s+/g, " ").trim();
+const escRe = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const WDF = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+const MONF = { 12: ["dec", "december"], 1: ["jan", "january"] };
+const isoOf = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+let INDEX = null, focusItem = null, searchBack = "#/";
+function dateWords(d) {  // just the ways you'd name the date, for steps and to-dos
+  const dd = dObj(d.date), n = dd.getDate(), m = dd.getMonth() + 1, mo = MONF[m] || ["", ""];
+  const extra = /christmas|xmas/i.test(d.hol || "") ? "christmas xmas" : /new year/i.test(d.hol || "") ? "new year nye" : "";
+  return [fmt(d.date), `${n} ${mo[0]}`, `${n} ${mo[1]}`, `${mo[0]} ${n}`, `${n}/${m}`, `${n}.${m}`, WDF[dd.getDay()], d.hol || "", extra].join(" | ");
+}
+function dayAliases(d) {
+  const dd = dObj(d.date), n = dd.getDate(), m = dd.getMonth() + 1, mo = MONF[m] || ["", ""];
+  const extra = /christmas|xmas/i.test(d.hol || "") ? "christmas xmas" : /new year/i.test(d.hol || "") ? "new year nye" : "";
+  return [fmt(d.date), `${n} ${mo[0]}`, `${n} ${mo[1]}`, `${mo[0]} ${n}`, `${n}/${m}`, `${n}.${m}`, WDF[dd.getDay()], d.hol || "", extra, legName(d.leg), d.place || ""].join(" | ");
+}
+function buildIndex() {
+  const docs = [];
+  // kw = what the thing IS (day names/dates, "train", "hotel"…): matched as strongly as the title
+  const add = (o) => { o.nt = norm(o.title); o.nk = norm(o.kw || ""); o.nb = norm(o.body || ""); docs.push(o); };
+  const legOf = (date) => (D.days.find((d) => d.date === date) || D.days[0]).leg;
+  for (const d of D.days) {
+    add({ type: "day", title: d.title, sub: `${fmt(d.date)} · ${legName(d.leg)}`, kw: dayAliases(d), body: d.note || "", href: `#/day/${d.id}`, date: d.date, photo: d.photo, leg: d.leg });
+    d.items.forEach((it, i) => add({ type: "plan", title: plain(it.html), sub: `${fmt(d.date)}${it.t ? " · " + it.t : ""}`,
+      body: `${it.t} ${it.maps.map((m) => m.label).join(" ")} ${dateWords(d)}`, href: `#/day/${d.id}`, focus: `${d.id}|${i}`, date: d.date, leg: d.leg, go: it.go, photo: (it.maps[0] || {}).photo }));
+    d.todos.forEach((t) => add({ type: "todo", title: t.text.split(" · ")[0], sub: `${fmt(d.date)} · ${t.status}`, body: `${t.text} ${t.status} to do to book ${dateWords(d)}`, href: `#/day/${d.id}`, date: d.date, leg: d.leg }));
+  }
+  for (const t of D.tickets) {
+    const full = byTicket.get(t.id);
+    add({ type: "ticket", title: t.name, sub: `${t.date ? fmt(t.date) : ""}${t.until && t.until !== t.date ? " → " + fmt(t.until) : ""}`,
+      kw: t.kind === "train" ? "train rail tgv ticket" : t.kind === "hotel" ? "hotel booking stay" : t.kind === "car" ? "car rental sixt" : "ticket entry",
+      body: `${t.when} ${full ? full.ref + " " + full.info : ""}`,
+      href: `#/ticket/${t.id}`, date: t.date, leg: legOf(t.date), kind: t.kind });
+  }
+  for (const h of D.hotels) add({ type: "hotel", title: h.name || `${h.city} hotel`, sub: `${h.city} · ${fmt(h.from).slice(4)} – ${fmt(h.to).slice(4)}`,
+    kw: `hotel ${h.city}`, body: `stay sleep ${h.address || ""} ${h.phone || ""} ${h.note || ""}`, href: "#/info/hotels", date: h.from, leg: legOf(h.from) });
+  for (const l of D.legs) for (const c of l.cafes) add({ type: "cafe", title: c.name, sub: `${l.name}${c.when ? " · " + c.when : ""}`, body: `cafe coffee shop ${c.desc} ${c.when} ${l.name}`, href: c.url, photo: c.photo, leg: l.key });
+  Object.entries(D.phrases).forEach(([lang, items], li) => items.forEach(([en, fx], i) => add({ type: "phrase", title: fx, sub: en, body: `${en} ${lang} phrase say`, href: `#/say/${li}/${i}` })));
+  for (const e of D.emergency) add({ type: "help", title: e.label, sub: e.number, body: `emergency help call ${e.number} ${e.note || ""}`, href: `tel:${e.number}` });
+  INDEX = docs;
+}
+function matchScore(tk, o) {
+  // a 1–2 digit number is a day of the month: match it whole ("26" ≠ booking no. 2610…)
+  const re = /^\d{1,2}$/.test(tk) ? new RegExp(`(^|[^a-z0-9:])${tk}($|[^0-9:])`) : new RegExp(`(^|[^a-z0-9])${escRe(tk)}`);
+  if (re.test(o.nt) || re.test(o.nk)) return 3;
+  if (re.test(o.nb)) return 1.5;
+  if (tk.length >= 4 && (o.nt.includes(tk) || o.nk.includes(tk))) return 2;
+  if (tk.length >= 4 && o.nb.includes(tk)) return 1;
+  return 0;
+}
+const TYPEW = { day: 2, ticket: 1.6, hotel: 1.4, plan: 1, cafe: 1, todo: 0.8, phrase: 0.6, help: 0.6 };
+function runSearch(q) {
+  if (!INDEX) buildIndex();
+  let qn = norm(q), only = null;
+  const rel = { today: 0, tonight: 0, tomorrow: 1, yesterday: -1 };
+  for (const [w, off] of Object.entries(rel)) {
+    if (new RegExp(`(^| )${w}( |$)`).test(qn)) { const dd = dObj(todayIso()); dd.setDate(dd.getDate() + off); only = isoOf(dd); qn = qn.replace(w, " ").trim(); }
+  }
+  const toks = qn.split(" ").filter(Boolean);
+  if (!toks.length && !only) return [];
+  const out = [];
+  for (const o of INDEX) {
+    if (only && o.date !== only) continue;
+    let score = 0, ok = true;
+    for (const tk of toks) { const m = matchScore(tk, o); if (!m) { ok = false; break; } score += m; }
+    if (ok) out.push([score + (TYPEW[o.type] || 0), o]);
+  }
+  return out.sort((a, b) => b[0] - a[0] || (a[1].date || "~").localeCompare(b[1].date || "~")).map((x) => x[1]);
+}
+function hl(text, q) {
+  const chars = [...String(text || "")];
+  const low = chars.map((c) => (c.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")[0] || " ")).join("");
+  const on = new Array(chars.length).fill(false);
+  for (const tk of norm(q).split(" ").filter((t) => t && !["today", "tonight", "tomorrow", "yesterday"].includes(t))) {
+    const re = new RegExp(`(^|[^a-z0-9])(${escRe(tk)})`, "g"); let m;
+    while ((m = re.exec(low))) { const st = m.index + m[1].length; for (let k = st; k < st + tk.length; k++) on[k] = true; re.lastIndex = st + 1; }
+  }
+  let html = "", open = false;
+  chars.forEach((c, i) => { if (on[i] && !open) { html += "<mark>"; open = true; } if (!on[i] && open) { html += "</mark>"; open = false; } html += esc(c); });
+  return html + (open ? "</mark>" : "");
+}
+const GROUPS = [["day", "Days"], ["plan", "Plan"], ["ticket", "Tickets & bookings"], ["hotel", "Hotels"], ["todo", "To do"], ["cafe", "Cafés & shops"], ["phrase", "Phrases"], ["help", "Help"]];
+const TYPE_IC = { day: "cal", plan: "pin", hotel: "bed", todo: "list", cafe: "cup", phrase: "chat", help: "phone" };
+function sRow(o, q) {
+  const p = photo(o.photo);
+  const icon = o.type === "ticket" ? (KIND_IC[o.kind] || "qr") : o.type === "plan" && o.go ? "route" : TYPE_IC[o.type];
+  const ext = /^https?:|^tel:/.test(o.href);
+  return `<a class="row srow${o.leg ? " lg-" + o.leg : ""}" href="${esc(o.href)}"${o.focus ? ` data-focus="${o.focus}"` : ""}${ext ? "" : ' data-dir="push"'} style="--inset:68px">
+    <span class="qt${p ? " ph" : ""}"${p ? bg(o.photo) : ""}>${p ? "" : ic(icon)}</span>
+    <span class="tx"><b>${hl(o.title, q)}</b><span>${hl(o.sub, q)}</span></span>${ext ? ic("ext", "ic chev") : ic("right", "ic chev")}</a>`;
+}
+function recentQs() { try { return JSON.parse(localStorage.getItem("recentQ") || "[]"); } catch (_) { return []; } }
+function rememberQ(q) { q = q.trim(); if (!q) return; try { localStorage.setItem("recentQ", JSON.stringify([q, ...recentQs().filter((x) => x !== q)].slice(0, 6))); } catch (_) {} }
+function searchResults(q) {
+  if (!q.trim()) {
+    const rec = recentQs();
+    const sug = tripState() === "during" ? ["Today", "Tomorrow", "Train", "Hotel", "To book"] : ["Christmas", "Train", "Hotel", "Louvre", "To book", "Croissant"];
+    return (rec.length ? `<section class="sec"><div class="sec-h"><h2>Recent</h2></div><div class="sugg">${rec.map((x) => `<button data-act="q" data-v="${esc(x)}">${ic("search")}${esc(x)}</button>`).join("")}</div></section>` : "")
+      + `<section class="sec"><div class="sec-h"><h2>Try</h2></div><div class="sugg">${sug.map((x) => `<button data-act="q" data-v="${esc(x)}">${esc(x)}</button>`).join("")}</div>
+      <p class="foot" style="margin:14px 2px 0">Search any place, day, ticket, hotel, café or phrase. Dates work too: “26 dec”, “friday”, “tomorrow”.</p></section>`;
+  }
+  const hits = runSearch(q);
+  if (!hits.length) return `<div class="empty"><span class="big-ic">${ic("search")}</span><h2>No matches</h2><p>Nothing for “${esc(q.trim())}”. Try a place, a date like “26 dec”, or a word like “train”.</p></div>`;
+  return `<p class="foot" style="margin:2px 22px 0">${hits.length} result${hits.length === 1 ? "" : "s"}</p>` + GROUPS.map(([type, name]) => {
+    const g = hits.filter((o) => o.type === type);
+    if (!g.length) return "";
+    const shown = g.slice(0, 8);
+    return `<section class="sec"><div class="sec-h"><h2>${name}</h2><span>${g.length}</span></div><div class="list">${shown.map((o) => sRow(o, q)).join("")}</div>
+      ${g.length > shown.length ? `<p class="foot">+${g.length - shown.length} more · add a word to narrow it down</p>` : ""}</section>`;
+  }).join("");
+}
+function viewSearch() {
+  return `<div class="sbar"><label class="sfield">${ic("search")}<input id="q" type="search" placeholder="Days, places, tickets, hotels…" enterkeyhint="search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" aria-label="Search the trip"><button type="button" class="sclear" data-act="clearq" aria-label="Clear" hidden>${ic("close")}</button></label>
+    <button type="button" class="scancel" data-act="cancelsearch">Cancel</button></div><div class="sres" id="sres">${searchResults("")}</div>`;
+}
+function wireSearch(el) {
+  const inp = el.querySelector("#q"), out = el.querySelector("#sres"), clr = el.querySelector(".sclear");
+  let t = 0;
+  const draw = () => { out.innerHTML = searchResults(inp.value); clr.hidden = !inp.value; hydrate(out); };
+  inp.addEventListener("input", () => { clearTimeout(t); t = setTimeout(draw, 70); });
+  inp.addEventListener("keydown", (e) => { if (e.key === "Enter") { inp.blur(); rememberQ(inp.value); } });
+  el._draw = draw;
+}
+function openSearch() {  // runs inside the tap, so iOS lets the keyboard open
+  if (route().name !== "search") searchBack = keyNow();
+  navDir = "none";
+  history.pushState(null, "", "#/search");
+  render();
+  const inp = cur && cur.el.querySelector("#q");
+  if (inp) { inp.focus(); inp.select(); }
 }
 
 /* ---------- router ----------
@@ -369,11 +525,11 @@ function route() {
   return { name, a, b };
 }
 const keyNow = () => (location.hash && location.hash !== "#" ? location.hash : "#/");
-function tabOf(r) { return { home: "days", day: "days", tickets: "tickets", ticket: "tickets", bookings: "tickets", cafes: "cafes", info: "info", say: "info" }[r.name] || "days"; }
+function tabOf(r) { return { home: "days", day: "days", tickets: "tickets", ticket: "tickets", bookings: "tickets", cafes: "cafes", info: "info", say: "info", search: "" }[r.name] ?? "days"; }
 function viewFor(r) {
   return r.name === "day" ? viewDay(r.a) : r.name === "ticket" ? viewTicket(r.a) : r.name === "tickets" ? viewTickets()
     : r.name === "bookings" ? viewTickets() : r.name === "cafes" ? viewCafes() : r.name === "info" ? viewInfo(r.a)
-    : r.name === "say" ? viewSay(r.a, r.b) : viewHome();
+    : r.name === "say" ? viewSay(r.a, r.b) : r.name === "search" ? viewSearch() : viewHome();
 }
 function invalidate() { screens.forEach((s) => s.el.remove()); screens.clear(); cur = null; }
 // navigate, and still draw when the hash is already there (no hashchange would fire)
@@ -400,10 +556,25 @@ function render() {
     } else { screens.delete(key); screens.set(key, s); }  // mark as recently used
     s.el.hidden = false;
     cur = s;
+    hydrate(s.el);
     window.scrollTo(0, !fresh && (dir === "pop" || dir === "tab") ? s.scroll : 0);
     if (!fresh) refreshNow();
     $$("#tabs a").forEach((a) => a.classList.toggle("on", a.dataset.tab === tabOf(r)));
-    $("#tabs").hidden = r.name === "say";
+    $("#tabs").hidden = r.name === "say" || r.name === "search";
+    $("#sbtn").hidden = r.name === "say" || r.name === "search";
+    if (focusItem && r.name === "day" && focusItem.split("|")[0] === r.a) {  // came from search: show that exact step
+      const li = s.el.querySelectorAll(".sched li")[+focusItem.split("|")[1]];
+      focusItem = null;
+      if (li) setTimeout(() => {  // after the screen-change animation, or the scroll gets cancelled
+        const target = () => { const r = li.getBoundingClientRect(); return Math.max(0, window.scrollY + r.top - (innerHeight - r.height) / 2); };
+        window.scrollTo({ top: target(), behavior: reduce ? "auto" : "smooth" });
+        setTimeout(() => {  // backstop: if smooth scrolling didn't run (screen not drawing), jump there
+          const r = li.getBoundingClientRect();
+          if (r.top < 0 || r.bottom > innerHeight) window.scrollTo(0, target());
+        }, 650);
+        li.classList.remove("flash"); void li.offsetWidth; li.classList.add("flash");
+      }, dir === "none" ? 30 : 480);
+    }
     const on = $("#tabs a.on");
     $("#tabs").style.setProperty("--i", on ? [...$$("#tabs a")].indexOf(on) : 0);
     $("#tabs").classList.remove("mini");
@@ -424,6 +595,7 @@ function after(r, el) {
   if (r.name === "day") {
     markSchedule(el, byDay.get(r.a));
   }
+  if (r.name === "search") wireSearch(el);
   const codes = el.querySelector(".codes"), dots = [...el.querySelectorAll(".dots i")];
   if (codes && dots.length) codes.addEventListener("scroll", () => {
     const step = codes.firstElementChild.offsetWidth + 12;
@@ -443,6 +615,9 @@ function markSchedule(el, d) {
 
 /* ---------- interactions ---------- */
 document.addEventListener("click", (e) => {
+  if (e.target.closest("#sbtn")) { e.preventDefault(); openSearch(); return; }
+  const sr = e.target.closest(".srow");
+  if (sr) { const inp = cur && cur.el.querySelector("#q"); if (inp) rememberQ(inp.value); if (sr.dataset.focus) focusItem = sr.dataset.focus; }
   const a = e.target.closest("a[href^='#']");
   if (a) {
     const r = route(), to = a.getAttribute("href");
@@ -454,6 +629,11 @@ document.addEventListener("click", (e) => {
   const b = e.target.closest("[data-act]");
   if (!b) return;
   if (b.dataset.act === "import") pickPack();
+  if (b.dataset.act === "q" || b.dataset.act === "clearq") {
+    const inp = cur && cur.el.querySelector("#q");
+    if (inp) { inp.value = b.dataset.act === "q" ? b.dataset.v : ""; cur.el._draw(); if (b.dataset.act === "clearq") inp.focus(); }
+  }
+  if (b.dataset.act === "cancelsearch") { navDir = "pop"; go(searchBack || "#/"); }
   if (b.dataset.act === "copy") navigator.clipboard?.writeText(b.dataset.v).then(() => toast("Booking ref copied"), () => toast(b.dataset.v));
 });
 window.addEventListener("hashchange", render);
@@ -468,6 +648,7 @@ function neighbourEl(day) {
     el.className = "scr"; el.hidden = true; el.innerHTML = viewDay(day.id);
     app.appendChild(el); s = { el, scroll: 0 }; screens.set(key, s);
     after({ name: "day", a: day.id }, el);
+    hydrate(el);
   }
   return s.el;
 }
@@ -639,7 +820,7 @@ async function setTickets(pack) {
     t.pages = await Promise.all(t.pages.map(blobUrl));
     t.codes.forEach((c) => ticketUrls.push(c.img)); ticketUrls.push(...t.pages);
   }
-  T = pack; byTicket.clear(); pack.tickets.forEach((t) => byTicket.set(t.id, t));
+  T = pack; byTicket.clear(); pack.tickets.forEach((t) => byTicket.set(t.id, t)); INDEX = null;
 }
 
 /* ---------- boot ---------- */
@@ -671,12 +852,13 @@ async function boot() {
   document.querySelector('meta[name="apple-mobile-web-app-title"]').setAttribute("content", D.trip.name);
   D.days.forEach((d) => byDay.set(d.id, d));
   D.tickets.forEach((t) => stubs.set(t.id, t));
-  await Promise.all(Object.keys(D.photos).map(async (k) => { D.photos[k] = await blobUrl(D.photos[k]); }));  // decode once, reuse everywhere
   try { const buf = await kv("get", "pack"); if (buf) await setTickets(await unseal(buf)); } catch (_) {}
   const bootMark = app.querySelector(".boot"); if (bootMark) bootMark.remove();
   $("#tabs").hidden = false;
+  $("#sbtn").hidden = false;
   if (!location.hash && tripState() === "during") { const t = byDay.get(todayIso().replace(/-/g, "")); if (t) history.replaceState(null, "", "#/day/" + t.id); }
   render();
+  setTimeout(preloadPhotos, 900);
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("sw.js").catch(() => {});
     let had = !!navigator.serviceWorker.controller;

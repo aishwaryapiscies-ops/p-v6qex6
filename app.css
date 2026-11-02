@@ -1,7 +1,7 @@
 /* Native iOS feel: system type, grouped lists, photo cards, floating glass tab bar. */
 :root{
   color-scheme:dark light;
-  --tw:min(calc(100vw - 108px),340px); --twm:min(calc(100vw - 150px),250px);
+  --tw:min(calc(100vw - 100px),420px); --tbh:56px; --tbb:max(12px,calc(var(--bot) - 14px));
   --bg:#000; --bg-2:#0B0B0D; --card:#1C1C1E; --card-2:#2C2C2E; --card-3:#3A3A3C;
   --fill:rgba(120,120,128,.24); --fill-2:rgba(120,120,128,.16);
   --sep:rgba(84,84,88,.55);
@@ -12,7 +12,7 @@
   --pass-ink-l1:#fff; --pass-ink-l2:#211500; --pass-ink-l3:#fff;
   --green:#32D74B; --orange:#FF9F0A; --red:#FF453A;
   --glass:rgba(30,30,34,.40); --glass-line:rgba(255,255,255,.10); --glass-hi:rgba(255,255,255,.42); --glass-lo:rgba(255,255,255,.10);
-  --glass-blur:blur(11px) saturate(240%) brightness(.92) contrast(1.06); --glass-sel:rgba(255,255,255,.12); --tab-on:#6FB3FF;
+  --glass-blur:blur(11px) saturate(240%) brightness(.92) contrast(1.06); --glass-sel:rgba(255,255,255,.12); --tab-sel:rgba(0,0,0,.42); --tab-on:#8CB8FF;
   --rim:linear-gradient(140deg,rgba(255,255,255,.75),rgba(255,255,255,.12) 28%,rgba(255,255,255,.04) 55%,rgba(255,255,255,.18) 80%,rgba(255,255,255,.55));
   --shadow:0 10px 30px rgba(0,0,0,.45);
   --font:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display",system-ui,"Helvetica Neue",sans-serif;
@@ -29,14 +29,14 @@
   --tint:#0064E0; --l1:#0064E0; --l2:#B86E00; --l3:#D7261C;
   --green:#248A3D; --orange:#C25E00; --red:#D70015;
   --glass:rgba(255,255,255,.52); --glass-line:rgba(255,255,255,.6); --glass-hi:rgba(255,255,255,1); --glass-lo:rgba(0,0,0,.05);
-  --glass-blur:blur(11px) saturate(220%) brightness(1.06) contrast(1.04); --glass-sel:rgba(0,0,0,.07); --tab-on:#0060D6;
+  --glass-blur:blur(11px) saturate(220%) brightness(1.06) contrast(1.04); --glass-sel:rgba(0,0,0,.07); --tab-sel:rgba(0,0,0,.075); --tab-on:#0060D6;
   --rim:linear-gradient(140deg,#fff,rgba(255,255,255,.35) 30%,rgba(0,0,0,.06) 60%,rgba(255,255,255,.4) 85%,#fff);
   --shadow:0 10px 30px rgba(0,0,0,.12);
 }}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html{background:var(--bg);-webkit-text-size-adjust:100%;text-size-adjust:100%}
 body{margin:0;background:var(--bg);color:var(--label);font:17px/1.35 var(--font);letter-spacing:-.01em;
-  -webkit-font-smoothing:antialiased;overscroll-behavior-y:none;padding-bottom:calc(var(--bot) + 104px);min-height:100vh}
+  -webkit-font-smoothing:antialiased;overscroll-behavior-y:none;padding-bottom:calc(var(--tbb) + var(--tbh) + 40px);min-height:100vh}
 ::selection{background:color-mix(in srgb,var(--tint) 35%,transparent)}
 a{color:inherit;text-decoration:none}
 button{font:inherit;color:inherit;border:0;background:none;padding:0;cursor:pointer}
@@ -150,6 +150,27 @@ button.row{width:100%;text-align:left}
   background:color-mix(in srgb,var(--orange) 18%,transparent);color:var(--orange)}
 .badge.ok{background:color-mix(in srgb,var(--green) 18%,transparent);color:var(--green)}
 .badge .ic{width:13px;height:13px;stroke-width:2.6}
+.badge.no{background:var(--fill-2);color:var(--label-2)}
+
+/* café and hotel pages: the photo on its own, then the facts below it */
+.xhero{position:relative;height:calc(var(--top) + 290px);background:var(--pass) var(--img,none) center/cover no-repeat}
+.xhero::after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(180deg,rgba(0,0,0,.32) 0%,rgba(0,0,0,0) 28%,rgba(0,0,0,0) 78%,var(--bg) 100%)}
+.xhero.noimg{background:linear-gradient(170deg,var(--pass),color-mix(in srgb,var(--pass) 30%,var(--bg)))}
+.xhero .topbar{position:relative;z-index:1}
+.xhead{padding:6px 20px 0;display:flex;flex-direction:column;align-items:flex-start;gap:6px}
+.xhead h1{font-size:30px;line-height:1.1;font-weight:800;letter-spacing:-.03em;text-wrap:balance}
+.xhead p{color:var(--label-2);font-size:16px;line-height:1.35}
+.xhead .pill{margin-top:4px}
+.xhead .pill .ic{color:var(--leg)}
+.xacts{padding:16px 20px 0}
+.xabout{padding:16px 22px 0;font-size:17px;line-height:1.45;color:var(--label)}
+.trow{min-height:46px}
+.trow .dot{flex:none;width:8px;height:8px;border-radius:50%;background:var(--leg,var(--tint))}
+.trow .tx b{font-size:16px}
+.vday{flex:none;display:flex;flex-direction:column;align-items:center;justify-content:center;width:42px;height:44px;border-radius:12px;background:var(--card-2)}
+.vday small{font:700 10px/1 var(--font);letter-spacing:.06em;text-transform:uppercase;color:var(--red)}
+.vday b{font:700 19px/1 var(--round);margin-top:3px}
+.vrow .badge{max-width:34%}
 .foot{color:var(--label-2);font-size:13.5px;margin:8px 16px 0;line-height:1.4}
 
 /* ---------- day screen ---------- */
@@ -162,7 +183,8 @@ button.row{width:100%;text-align:left}
 .topbar.plain{padding-bottom:4px}
 .topbar.plain .gbtn{color:var(--label);background:var(--card);border:0;-webkit-backdrop-filter:none;backdrop-filter:none}
 .lt.lt-sub{padding-top:8px}
-.scr[hidden]{display:none}
+/* screens you've left stay laid out but unpainted, so coming back to a tab costs nothing */
+.scr[hidden]{display:block;position:absolute;top:0;left:0;right:0;height:0;overflow:hidden;content-visibility:hidden;pointer-events:none}
 
 .topbar .sp{flex:1}
 .gbtn{display:grid;place-items:center;width:44px;height:44px;border-radius:50%;color:#fff;transition:transform .3s var(--spring);
@@ -314,34 +336,28 @@ details.pages img{display:block;width:100%;height:auto;background:#fff;border-to
 /* specular rim: a thin ring lit from the top-left, like light catching the edge of a glass slab */
 .glass::after,.tabs::after,.gbtn::after,.chip-glass::after,.nbchip::after,.sbtn::after{content:"";position:absolute;inset:0;border-radius:inherit;padding:1px;pointer-events:none;
   background:var(--rim);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;opacity:.9}
-.tabs{position:fixed;z-index:10;left:calc(50% - 34px);bottom:calc(var(--bot) + 10px);transform:translateX(-50%);width:var(--tw);height:66px;
-  display:grid;grid-template-columns:repeat(4,1fr);padding:5px;border-radius:33px;isolation:isolate;
-  transition:transform .5s var(--spring);will-change:transform}
+.tabs{position:fixed;z-index:10;left:calc(50% - (var(--tw) + 64px) / 2);bottom:var(--tbb);width:var(--tw);height:var(--tbh);
+  display:grid;grid-template-columns:repeat(4,1fr);padding:4px;border-radius:999px;isolation:isolate}
 .tabs::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:-1;
-  background:radial-gradient(120% 90% at 18% -10%,rgba(255,255,255,.22),transparent 55%),radial-gradient(90% 80% at 100% 120%,rgba(255,255,255,.08),transparent 60%)}
+  background:radial-gradient(120% 90% at 18% -10%,rgba(255,255,255,.16),transparent 55%)}
 .tabs[hidden]{display:none}
-.tabs a{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-radius:28px;color:var(--label);text-shadow:0 1px 6px rgba(0,0,0,.18);font-size:10px;font-weight:600;letter-spacing:.01em;transition:color .2s}
-.tabs a .ic{width:25px;height:25px;transition:transform .5s var(--spring)}
-.tabs a span{display:block;transition:opacity .16s ease}
+.tabs a{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;border-radius:999px;color:var(--label);font-size:11px;font-weight:600;letter-spacing:0;line-height:1.1;transition:color .18s}
+.tabs a .ic{width:24px;height:24px;stroke-width:1.9;transition:transform .45s var(--spring)}
 .tabs a.on{color:var(--tab-on,var(--tint))}
-.tabs a.on .ic{stroke-width:2.3}
-.tabs a:active .ic{transform:scale(.86)}
-.tabs .bubble{position:absolute;z-index:0;top:5px;bottom:5px;left:5px;width:calc((100% - 10px) / 4);border-radius:28px;background:var(--glass-sel);
-  box-shadow:inset 0 1px .5px rgba(255,255,255,.35),inset 0 -1px .5px rgba(255,255,255,.08),inset 0 8px 14px -10px rgba(255,255,255,.3),0 2px 8px rgba(0,0,0,.12);
-  transform:translateX(calc(var(--i,0) * 100%));transition:transform .5s cubic-bezier(.3,1.25,.4,1),background .25s,box-shadow .25s;will-change:transform}
-/* pressing the bar turns the selection into a clear magnifying lens that follows your finger */
-.tabs.press .bubble{background:rgba(255,255,255,.07);box-shadow:inset 0 1px 1px rgba(255,255,255,.6),inset 0 -1px 1px rgba(255,255,255,.2),inset 0 0 0 1px rgba(255,255,255,.22),inset 0 10px 18px -10px rgba(255,255,255,.45),0 8px 24px rgba(0,0,0,.25)}
+.tabs a:active .ic{transform:scale(.88)}
+/* the selection: a darker filled pill that glides between tabs and stretches a little as it moves */
+.tabs .bubble{position:absolute;z-index:0;top:4px;bottom:4px;left:4px;width:calc((100% - 8px) / 4);border-radius:999px;background:var(--tab-sel);
+  box-shadow:inset 0 .5px 0 rgba(255,255,255,.08);
+  transform:translateX(calc(var(--i,0) * 100%));transition:transform .42s cubic-bezier(.25,1.2,.4,1),background .2s,box-shadow .2s;will-change:transform}
+/* pressing the bar turns the selection into a clear lens that follows your finger */
+.tabs.press .bubble{background:rgba(255,255,255,.06);box-shadow:inset 0 1px 1px rgba(255,255,255,.55),inset 0 -1px 1px rgba(255,255,255,.18),inset 0 0 0 1px rgba(255,255,255,.2),inset 0 10px 18px -10px rgba(255,255,255,.4),0 8px 24px rgba(0,0,0,.25)}
 .tabs.press a.hover{color:var(--tab-on,var(--tint))}
-.tabs.press a.hover .ic{transform:scale(1.12)}
+.tabs.press a.hover .ic{transform:scale(1.1)}
 .tabs{touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
-.tabs.mini{transform:translateX(-50%) translateY(6px) scale(.86)}
-.tabs.mini a span{opacity:0}
-.tabs.mini a .ic{transform:translateY(7px) scale(1.08)}
-.tabs.mini a .ic{width:23px;height:23px}
 @media (prefers-reduced-transparency:reduce){
   .tabs,.gbtn,.chip-glass,.glass{background:var(--card-2);-webkit-backdrop-filter:none;backdrop-filter:none}
   .dmeta span{background:rgba(0,0,0,.55);-webkit-backdrop-filter:none;backdrop-filter:none}}
-.toast{position:fixed;z-index:30;left:50%;bottom:calc(var(--bot) + 92px);transform:translate(-50%,20px);opacity:0;pointer-events:none;
+.toast{position:fixed;z-index:30;left:50%;bottom:calc(var(--tbb) + var(--tbh) + 14px);transform:translate(-50%,20px);opacity:0;pointer-events:none;
   max-width:calc(100vw - 40px);padding:12px 18px;border-radius:999px;background:var(--card-3);color:var(--label);font-size:15px;font-weight:500;box-shadow:var(--shadow);transition:opacity .25s,transform .35s var(--spring)}
 .toast.on{opacity:1;transform:translate(-50%,0)}
 
@@ -422,12 +438,11 @@ html[data-nav=tab]::view-transition-old(root){animation:fadeOut .16s ease-in}
 .seg + .sec{margin-top:18px}
 
 /* search button beside the tab bar */
-.sbtn{position:fixed;z-index:10;bottom:calc(var(--bot) + 14px);left:calc(50% + var(--tw) / 2 - 24px);width:58px;height:58px;border-radius:50%;
+.sbtn{position:fixed;z-index:10;bottom:var(--tbb);left:calc(50% + (var(--tw) + 64px) / 2 - var(--tbh));width:var(--tbh);height:var(--tbh);border-radius:50%;
   display:grid;place-items:center;color:var(--label);transition:transform .5s var(--spring);will-change:transform;touch-action:manipulation}
 .sbtn[hidden]{display:none}
-.sbtn .ic{width:25px;height:25px;stroke-width:2.2}
+.sbtn .ic{width:24px;height:24px;stroke-width:2}
 .sbtn:active{transform:scale(.9);transition-duration:.15s}
-.tabs.mini ~ .sbtn{transform:translate(calc(var(--tw) * -.07), 6px) scale(.86)}
 @media (prefers-reduced-transparency:reduce){.sbtn{background:var(--card-2);-webkit-backdrop-filter:none;backdrop-filter:none}}
 /* search screen. iOS fades the strip just under the status bar in home-screen apps; the field starts below
    that strip so the fade only ever lies over plain background, never over the field */
@@ -477,13 +492,13 @@ mark{background:color-mix(in srgb,var(--tint) 32%,transparent);color:inherit;bor
 @media (prefers-reduced-transparency:reduce){.alert{background:var(--card-2);-webkit-backdrop-filter:none;backdrop-filter:none}}
 
 /* update-ready pill, centred just above the tab bar */
-.upd{position:fixed;z-index:35;bottom:calc(var(--bot) + 88px);left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:8px;min-height:44px;
+.upd{position:fixed;z-index:35;bottom:calc(var(--tbb) + var(--tbh) + 12px);left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:8px;min-height:44px;
   padding:6px 8px 6px 14px;border-radius:999px;color:var(--label);font-size:15px;font-weight:600;white-space:nowrap;animation:updIn .45s var(--spring)}
 .upd.glass{background:color-mix(in srgb,var(--card) 84%,transparent)}  /* readable over any photo */
 .upd .ic{width:18px;height:18px;color:var(--tint)}
 .upd b{display:inline-flex;align-items:center;min-height:32px;padding:0 14px;border-radius:999px;background:var(--tint);color:#fff;font-weight:700}
 @keyframes updIn{from{transform:translate(-50%,24px) scale(.9);opacity:0}}
-body:has(#upd) .toast{bottom:calc(var(--bot) + 146px)}  /* a toast never covers the pill */
+body:has(#upd) .toast{bottom:calc(var(--tbb) + var(--tbh) + 68px)}  /* a toast never covers the pill */
 @media (prefers-reduced-motion:reduce){.upd{animation:none}}
 
 a,button{touch-action:manipulation}

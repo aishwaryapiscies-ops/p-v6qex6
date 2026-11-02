@@ -31,6 +31,7 @@ const ICONS = {
   map: '<path d="m9 4.5-5 2v13l5-2 6 2 5-2v-13l-5 2Z"/><path d="M9 4.5v13M15 6.5v13"/>',
   alert: '<path d="M12 4 2.5 20h19Z"/><path d="M12 10v4.5M12 17.4v.1"/>',
   camera: '<path d="M4 8h3l2-2.5h6L17 8h3v11H4Z"/><circle cx="12" cy="13" r="3.5"/>',
+  clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
   copy: '<rect x="8" y="8" width="12" height="12" rx="2.5"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',
 };
 const ic = (n, cls = "ic") => `<svg class="${cls}" aria-hidden="true"><use href="#i-${n}"/></svg>`;
@@ -222,7 +223,7 @@ function viewDay(id) {
   const i = D.days.indexOf(d), prev = D.days[i - 1], next = D.days[i + 1];
   const p = photo(d.photo), dd = dObj(d.date);
   let out = `<div class="dhero lg-${d.leg}${p ? "" : " noimg"}"${bg(d.photo, "xl")}>
-    <div class="topbar"><a class="gbtn" href="#/" data-dir="pop" aria-label="All days">${ic("left")}</a>
+    <div class="topbar"><a class="gbtn" href="#/" data-dir="pop" data-back aria-label="Back">${ic("left")}</a>
       <span class="nbchip">${prev ? `<a href="#/day/${prev.id}" data-dir="prev">${shortDay(prev)}</a>` : "<i></i>"}<b>${shortDay(d)}</b>${next ? `<a href="#/day/${next.id}" data-dir="next">${shortDay(next)}</a>` : "<i></i>"}</span>
       <a class="gbtn${prev ? "" : " off"}" href="${prev ? "#/day/" + prev.id : "#/"}" data-dir="prev" aria-label="Previous day">${ic("left")}</a>
       <a class="gbtn${next ? "" : " off"}" href="${next ? "#/day/" + next.id : "#/"}" data-dir="next" aria-label="Next day">${ic("right")}</a></div>
@@ -256,10 +257,14 @@ function viewDay(id) {
   if (d.hotel) {
     const h = d.hotel;
     out += `<section class="sec"><div class="sec-h"><h2>Tonight</h2></div><div class="list">${h.name
-      ? `<a class="row" href="${esc(h.url)}" style="--inset:61px"><span class="tile">${ic("bed")}</span><span class="tx"><b>${esc(h.name)}</b><span>${esc(h.address)}</span><span>${esc(h.note || "")}</span></span><span class="go-ic" style="display:grid;place-items:center;width:34px;height:34px;border-radius:50%;background:var(--tint);color:#fff">${ic("nav")}</span></a>
+      ? `<a class="row" href="#/hotel/${D.hotels.findIndex((x) => x.name === h.name)}" data-dir="push" style="--inset:61px"><span class="tile">${ic("bed")}</span><span class="tx"><b>${esc(h.name)}</b><span>${esc(h.address)}</span><span>${esc(h.note || "")}</span></span>${ic("right", "ic chev")}</a>
         ${h.phone ? `<a class="row" href="tel:${esc(h.phone.replace(/\s/g, ""))}" style="--inset:61px"><span class="tile" style="background:var(--green)">${ic("phone")}</span><span class="tx"><b>Call hotel</b><span>${esc(h.phone)}</span></span></a>` : ""}`
       : `<div class="row" style="--inset:61px"><span class="tile" style="background:var(--card-3)">${ic("bed")}</span><span class="tx"><b>${esc(h.city)} hotel</b><span>${esc(h.note)}</span></span></div>`}</div></section>`;
   }
+  const cs = cafesFor(d);
+  if (cs.length) out += `<section class="sec"><div class="sec-h"><h2>Suggested cafés</h2></div><div class="list">${cs.map(({ c, v, href }) =>
+    `<a class="row" href="${href}" data-dir="push" style="--inset:85px"><span class="ph"${bg(c.photo, "sm")}></span><span class="tx"><b>${esc(c.name)}</b>
+      <span>${v.fit === "plan" ? esc(v.why) : `${nearBy(v)} · ${esc(v.why)}`}</span></span>${ic("right", "ic chev")}</a>`).join("")}</div></section>`;
   out += `<nav class="daynav">${prev ? `<a href="#/day/${prev.id}" data-dir="prev"><small>‹ ${fmt(prev.date)}</small><b>${esc(prev.title)}</b></a>` : "<span></span>"}
     ${next ? `<a class="nx" href="#/day/${next.id}" data-dir="next"><small>${fmt(next.date)} ›</small><b>${esc(next.title)}</b></a>` : "<span></span>"}</nav></div>`;
   return out;
@@ -371,7 +376,7 @@ function viewInfo(seg) {
   if (seg === "hotels") {
   out += `<section class="sec">${L(D.hotels.map((h) => {
     const rng = `${fmt(h.from).slice(4)} – ${fmt(h.to).slice(4)}`;
-    return h.name ? `<a class="row" href="${esc(h.url)}" style="--inset:61px"><span class="tile">${ic("bed")}</span><span class="tx"><b>${esc(h.city)} · ${esc(h.name)}</b><span>${rng} · ${esc(h.address)}</span>${h.phone ? `<span>${esc(h.phone)}</span>` : ""}</span>${ic("right", "ic chev")}</a>`
+    return h.name ? `<a class="row" href="#/hotel/${D.hotels.indexOf(h)}" data-dir="push" style="--inset:61px"><span class="tile">${ic("bed")}</span><span class="tx"><b>${esc(h.city)} · ${esc(h.name)}</b><span>${rng} · ${esc(h.address)}</span>${h.phone ? `<span>${esc(h.phone)}</span>` : ""}</span>${ic("right", "ic chev")}</a>`
       : `<div class="row" style="--inset:61px"><span class="tile" style="background:var(--card-3)">${ic("bed")}</span><span class="tx"><b>${esc(h.city)}</b><span>${rng} · ${esc(h.note)}</span></span><span class="badge">To add</span></div>`;
   }))}</section>`;
   } else if (seg === "help") {
@@ -385,16 +390,84 @@ function viewInfo(seg) {
 }
 
 function viewCafes() {
-  let out = `<header class="lt"><div><h1>Cafés</h1><p>Cafés, treats and shops · tap for Maps</p></div></header>`;
-  for (const l of D.legs) {
+  let out = `<header class="lt"><div><h1>Cafés</h1><p>Cafés, treats and shops</p></div></header>`;
+  for (const [li, l] of D.legs.entries()) {
     if (!l.cafes.length) continue;
-    out += `<section class="sec lg-${l.key}"><div class="sec-h"><h2><i></i>${esc(l.name)}</h2><span>${l.cafes.length}</span></div><div class="grid2">${l.cafes.map((c) => {
+    out += `<section class="sec lg-${l.key}"><div class="sec-h"><h2><i></i>${esc(l.name)}</h2><span>${l.cafes.length}</span></div><div class="grid2">${l.cafes.map((c, i) => {
       const p = photo(c.photo);
-      return `<a class="ccard" href="${esc(c.url)}"><span class="ph${p ? "" : " noimg"}"${bg(c.photo, "md")}>${p ? "" : `<b>${esc(c.name.replace(/^(Café|Confiserie|Konditorei) /, "")[0])}</b>`}</span>
+      return `<a class="ccard" href="#/cafe/${li}/${i}" data-dir="push"><span class="ph${p ? "" : " noimg"}"${bg(c.photo, "md")}>${p ? "" : `<b>${esc(c.name.replace(/^(Café|Confiserie|Konditorei) /, "")[0])}</b>`}</span>
         <span class="tx"><b>${esc(c.name)}</b><span>${esc(c.desc)}${c.when ? " · " + esc(c.when) : ""}</span></span></a>`;
     }).join("")}</div></section>`;
   }
   return out;
+}
+
+/* ---------- café and hotel pages: photo, what it is, what to try, when it fits the plan, how to get there ---------- */
+const WDS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+function hoursText(h) {  // ["", "08:00-18:00", …] Sun..Sat → "Mon–Sat 08:00–18:00 · Sun closed"
+  const order = [1, 2, 3, 4, 5, 6, 0], runs = [];
+  for (const d of order) { const v = h[d] || ""; const r = runs[runs.length - 1]; if (r && r.v === v) r.to = d; else runs.push({ from: d, to: d, v }); }
+  return runs.map((r) => `${WDS[r.from]}${r.to !== r.from ? "–" + WDS[r.to] : ""} ${r.v ? r.v.replace("-", "–") : "closed"}`).join(" · ");
+}
+const nearBy = (v) => esc(v.m < 120 ? `At ${v.place}` : `${Math.max(2, Math.round(v.m / 80))} min walk from ${v.place}`);
+const FIT = { plan: ["ok", "In plan"], open: ["ok", "Open then"], check: ["warn", "Check"], late: ["no", "Closed by then"], early: ["no", "Not open yet"], closed: ["no", "Closed"] };
+const dayHref = (iso) => "#/day/" + iso.replace(/-/g, "");
+function visitRow(v) {
+  const [cls, tag] = FIT[v.fit] || FIT.closed, dd = dObj(v.date);
+  const sub = v.fit === "plan" ? v.why : `${nearBy(v)} · ${esc(v.why)}`;
+  return `<a class="row vrow" href="${dayHref(v.date)}" data-dir="push" style="--inset:68px"><span class="vday"><small>${WD[dd.getDay()]}</small><b>${dd.getDate()}</b></span>
+    <span class="tx"><b>${fmt(v.date)} · ${esc(v.t)}</b><span>${sub}</span></span><span class="badge ${cls}">${tag}</span></a>`;
+}
+function backBtn(fallback) { return `<a class="gbtn" href="${fallback}" data-dir="pop" data-back aria-label="Back">${ic("left")}</a>`; }
+function xHero(slug, leg, fallback) {
+  const p = photo(slug);
+  return `<div class="xhero lg-${leg}${p ? "" : " noimg"}"${bg(slug, "xl")}><div class="topbar">${backBtn(fallback)}</div></div>`;
+}
+function viewCafe(li, i) {
+  const l = D.legs[+li], c = l && l.cafes[+i];
+  if (!c) return viewCafes();
+  const good = (c.visits || []).filter((v) => v.fit !== "late" && v.fit !== "early" && v.fit !== "closed");
+  let out = `${xHero(c.photo, l.key, "#/cafes")}<div class="lg-${l.key}"><div class="xhead"><h1>${esc(c.name)}</h1><p>${esc(c.kind || c.desc)}</p>
+    <span class="pill">${ic("pin")}${esc(l.name)}</span></div>
+    <div class="btnrow xacts"><a class="btn solid" href="${esc(c.url)}">${ic("nav")}Directions</a>${c.web ? `<a class="btn" href="${esc(c.web)}">${ic("ext")}Menu & website</a>` : ""}${c.phone ? `<a class="btn" href="tel:${esc(c.phone.replace(/\s/g, ""))}">${ic("phone")}Call</a>` : ""}</div>`;
+  if (c.about) out += `<p class="xabout">${esc(c.about)}</p>`;
+  if (c.try && c.try.length) out += `<section class="sec"><div class="sec-h"><h2>Popular to try</h2></div><div class="list">${c.try.map((t) => `<div class="row trow"><i class="dot"></i><span class="tx"><b>${esc(t)}</b></span></div>`).join("")}</div></section>`;
+  if (c.visits && c.visits.length) {
+    out += `<section class="sec"><div class="sec-h"><h2>Visit when</h2></div><div class="list">${c.visits.map(visitRow).join("")}</div>
+      ${good.length ? "" : `<p class="foot">It's near your plan on this day but not open while you're there. It only fits if you find a free slot.</p>`}</section>`;
+  }
+  const info = [];
+  if (c.hours) info.push(`<div class="row" style="--inset:61px"><span class="tile">${ic("clock")}</span><span class="tx"><b>Usual hours</b><span>${esc(hoursText(c.hours))}</span></span></div>`);
+  if (c.near) info.push(`<div class="row" style="--inset:61px"><span class="tile">${ic("train")}</span><span class="tx"><b>Nearest stop</b><span>${esc(c.near)}</span></span></div>`);
+  info.push(`<a class="row" href="${esc(c.url)}" style="--inset:61px"><span class="tile">${ic("pin")}</span><span class="tx"><b>Address</b><span>${esc(c.addr || c.desc)}</span></span>${ic("right", "ic chev")}</a>`);
+  out += `<section class="sec"><div class="sec-h"><h2>Getting there</h2></div><div class="list">${info.join("")}</div>${c.hours ? `<p class="foot">Hours change over the holidays, so check before you go.</p>` : ""}</section></div>`;
+  return out;
+}
+function viewHotel(i) {
+  const h = D.hotels[+i];
+  if (!h) return viewInfo("hotels");
+  const nights = Math.round((dObj(h.to) - dObj(h.from)) / 864e5), leg = (D.days.find((d) => d.date === h.from) || D.days[0]).leg;
+  let out = `${xHero(h.photo, leg, "#/info/hotels")}<div class="lg-${leg}"><div class="xhead"><h1>${esc(h.name || h.city + " hotel")}</h1>
+    <p>${esc(h.city)} · ${fmt(h.from)} – ${fmt(h.to)} · ${nights} night${nights > 1 ? "s" : ""}</p></div>
+    <div class="btnrow xacts">${h.url ? `<a class="btn solid" href="${esc(h.url)}">${ic("nav")}Directions</a>` : ""}${h.phone ? `<a class="btn" href="tel:${esc(h.phone.replace(/\s/g, ""))}">${ic("phone")}Call</a>` : ""}</div>`;
+  const rows = [];
+  if (h.address) rows.push(`<a class="row" href="${esc(h.url)}" style="--inset:61px"><span class="tile">${ic("pin")}</span><span class="tx"><b>Address</b><span>${esc(h.address)}</span></span>${ic("right", "ic chev")}</a>`);
+  if (h.phone) rows.push(`<a class="row" href="tel:${esc(h.phone.replace(/\s/g, ""))}" style="--inset:61px"><span class="tile" style="background:var(--green)">${ic("phone")}</span><span class="tx"><b>Phone</b><span>${esc(h.phone)}</span></span></a>`);
+  if (rows.length) out += `<section class="sec"><div class="sec-h"><h2>Contact</h2></div><div class="list">${rows.join("")}</div></section>`;
+  if (h.near && h.near.length) out += `<section class="sec"><div class="sec-h"><h2>Nearest stations</h2></div><div class="list">${h.near.map(([n, d]) =>
+    `<div class="row" style="--inset:61px"><span class="tile">${ic("train")}</span><span class="tx"><b>${esc(n)}</b><span>${esc(d)}</span></span></div>`).join("")}</div></section>`;
+  const tips = [h.note, ...(h.tips || [])].filter(Boolean).flatMap((t) => t.split(" · ")).filter((t, k, a) => a.indexOf(t) === k);
+  if (tips.length) out += `<section class="sec"><div class="sec-h"><h2>Good to know</h2></div><div class="list">${tips.map((t) => `<div class="row trow"><i class="dot"></i><span class="tx"><b>${esc(t)}</b></span></div>`).join("")}</div></section>`;
+  return out + "</div>";
+}
+// cafés that fit a day: the ones the plan already visits, then open ones nearby
+function cafesFor(d) {
+  const out = [];
+  D.legs.forEach((l, li) => l.cafes.forEach((c, i) => {
+    const v = (c.visits || []).find((x) => x.date === d.date && (x.fit === "plan" || x.fit === "open" || x.fit === "check"));
+    if (v) out.push({ c, v, href: `#/cafe/${li}/${i}` });
+  }));
+  return out.sort((a, b) => (a.v.fit === "plan") === (b.v.fit === "plan") ? (mins(a.v.t) || 0) - (mins(b.v.t) || 0) : a.v.fit === "plan" ? -1 : 1);
 }
 
 function viewSay(li, i) {
@@ -475,9 +548,10 @@ function buildIndex() {
       body: `${t.when} ${full ? full.ref + " " + full.info : ""}`,
       href: `#/ticket/${t.id}`, date: t.date, leg: legOf(t.date), kind: t.kind });
   }
-  for (const h of D.hotels) add({ type: "hotel", title: h.name || `${h.city} hotel`, sub: `${h.city} · ${fmt(h.from).slice(4)} – ${fmt(h.to).slice(4)}`,
-    kw: `hotel ${h.city}`, body: `stay sleep ${h.address || ""} ${h.phone || ""} ${h.note || ""}`, href: "#/info/hotels", date: h.from, leg: legOf(h.from) });
-  for (const l of D.legs) for (const c of l.cafes) add({ type: "cafe", title: c.name, sub: `${l.name}${c.when ? " · " + c.when : ""}`, body: `cafe coffee shop ${c.desc} ${c.when} ${l.name}`, href: c.url, photo: c.photo, leg: l.key });
+  for (const [hi, h] of D.hotels.entries()) add({ type: "hotel", title: h.name || `${h.city} hotel`, sub: `${h.city} · ${fmt(h.from).slice(4)} – ${fmt(h.to).slice(4)}`,
+    kw: `hotel ${h.city}`, body: `stay sleep ${h.address || ""} ${h.phone || ""} ${h.note || ""}`, href: `#/hotel/${hi}`, date: h.from, leg: legOf(h.from) });
+  D.legs.forEach((l, li) => l.cafes.forEach((c, ci) => add({ type: "cafe", title: c.name, sub: `${l.name}${c.when ? " · " + c.when : c.kind ? " · " + c.kind : ""}`,
+    body: `cafe coffee shop ${c.desc} ${c.when} ${l.name} ${c.kind || ""} ${(c.try || []).join(" ")} ${c.addr || ""}`, href: `#/cafe/${li}/${ci}`, photo: c.photo, leg: l.key })));
   Object.entries(D.phrases).forEach(([lang, items], li) => items.forEach(([en, fx], i) => add({ type: "phrase", title: fx, sub: en, body: `${en} ${lang} phrase say`, href: `#/say/${li}/${i}` })));
   for (const e of D.emergency) add({ type: "help", title: e.label, sub: e.number, body: `emergency help call ${e.number} ${e.note || ""}`, href: `tel:${e.number}` });
   INDEX = docs;
@@ -579,21 +653,38 @@ function openSearch() {  // runs inside the tap, so iOS lets the keyboard open
    Screens are kept alive once built (photos are blob URLs, so they stay decoded): going back is
    instant and lands where you were. A small LRU keeps memory in check. */
 let navDir = "tab", lastRoute = null, cur = null, lastKey = "#/";
+const backStack = [];  // screens you drilled in from, so Back returns to the one you came from
 const screens = new Map();
-const ROOTS = new Set(["#/", "#/tickets", "#/cafes", "#/info"]);
-function route() {
-  const parts = (location.hash.replace(/^#\/?/, "").split("?")[0] || "").split("/").filter(Boolean);
+const ROOTS = new Set([...$$("#tabs a")].map((a) => a.getAttribute("href")));
+function route(hash = location.hash) {
+  const parts = (hash.replace(/^#\/?/, "").split("?")[0] || "").split("/").filter(Boolean);
   const [name = "home", a, b] = parts;
   return { name, a, b };
 }
 const keyNow = () => (location.hash && location.hash !== "#" ? location.hash : "#/");
-function tabOf(r) { return { home: "days", day: "days", tickets: "tickets", ticket: "tickets", bookings: "tickets", cafes: "cafes", info: "info", say: "info", search: "" }[r.name] ?? "days"; }
+function tabOf(r) { return { home: "days", day: "days", tickets: "tickets", ticket: "tickets", bookings: "tickets", cafes: "cafes", cafe: "cafes", info: "info", hotel: "info", say: "info", search: "" }[r.name] ?? "days"; }
 function viewFor(r) {
   return r.name === "day" ? viewDay(r.a) : r.name === "ticket" ? viewTicket(r.a) : r.name === "tickets" ? viewTickets()
     : r.name === "bookings" ? viewTickets() : r.name === "cafes" ? viewCafes() : r.name === "info" ? viewInfo(r.a)
+    : r.name === "cafe" ? viewCafe(r.a, r.b) : r.name === "hotel" ? viewHotel(r.a)
     : r.name === "say" ? viewSay(r.a, r.b) : r.name === "search" ? viewSearch() : viewHome();
 }
-function invalidate() { screens.forEach((s) => s.el.remove()); screens.clear(); cur = null; }
+function invalidate() { screens.forEach((s) => s.el.remove()); screens.clear(); cur = null; setTimeout(prebuild, 700); }
+// build each tab's screen ahead of time, between frames, so the first switch to it is as quick as every later one
+function prebuild() {
+  const todo = [...ROOTS].filter((k) => !screens.has(k));
+  const step = () => {
+    const k = todo.shift();
+    if (!k || !D) return;
+    if (!screens.has(k)) {
+      const r = route(k), el = document.createElement("div");
+      el.className = "scr"; el.hidden = true; el.innerHTML = viewFor(r);
+      app.appendChild(el); screens.set(k, { el, scroll: 0 }); after(r, el); hydrate(el);
+    }
+    (window.requestIdleCallback || ((f) => setTimeout(f, 60)))(step, { timeout: 400 });
+  };
+  step();
+}
 // navigate, and still draw when the hash is already there (no hashchange would fire)
 function go(hash) { if (keyNow() === hash) render(); else location.hash = hash; }
 function render() {
@@ -640,7 +731,6 @@ function render() {
     }
     const on = $("#tabs a.on");
     $("#tabs").style.setProperty("--i", on ? [...$$("#tabs a")].indexOf(on) : 0);
-    $("#tabs").classList.remove("mini");
   };
   document.documentElement.dataset.nav = dir;
   // tab switches, segment switches and pager commits draw instantly (as in Apple's apps); only drilling in/out animates
@@ -653,6 +743,7 @@ function render() {
     // a quick second tap skips the running animation; that's expected, not an error
     vt.ready.catch(() => {}); vt.finished.catch(() => {}); vt.updateCallbackDone.catch(() => {});
   } else apply();
+  if (dir === "push") backStack.push(lastKey); else if (dir === "pop") backStack.pop(); else if (dir === "tab") backStack.length = 0;
   lastRoute = r; lastKey = key; navDir = "tab";
 }
 function after(r, el) {
@@ -685,9 +776,11 @@ document.addEventListener("click", (e) => {
   const a = e.target.closest("a[href^='#']");
   const tab = a && a.closest("#tabs") ? a : null;
   if (tab) { e.preventDefault(); tabGo(tab); return; }
+  // Back returns to the screen you drilled in from (even after paging through days), else to the section's top
+  if (a && a.hasAttribute("data-back") && backStack.length) { e.preventDefault(); navDir = "pop"; go(backStack[backStack.length - 1]); return; }
   if (a) {
     const r = route(), to = a.getAttribute("href");
-    navDir = a.dataset.dir || (to.startsWith("#/day/") && r.name !== "day" ? "push" : to.startsWith("#/ticket/") ? "push"
+    navDir = a.dataset.dir || (to.startsWith("#/day/") && r.name !== "day" ? "push" : /^#\/(ticket|cafe|hotel)\//.test(to) ? "push"
       : (r.name === "day" || r.name === "ticket" || r.name === "say") && !to.startsWith("#/day/") && !to.startsWith("#/ticket/") ? (a.closest(".tabs") ? "tab" : "pop") : "tab");
     if (to.startsWith("#/ticket/") && r.name === "day") { e.preventDefault(); location.hash = to + "?from=day"; }
     return;
@@ -802,13 +895,6 @@ setInterval(() => {  // advance the pre-trip slideshow on the visible home scree
   const c = show.querySelector(".cap");
   if (c) { c.style.opacity = 0; setTimeout(() => { c.innerHTML = nx.dataset.cap; c.style.opacity = 1; }, 380); }
 }, 4800);
-let lastY = 0;
-addEventListener("scroll", () => {
-  const y = window.scrollY, bar = $("#tabs");
-  if (Math.abs(y - lastY) < 8) return;
-  bar.classList.toggle("mini", y > lastY && y > 120);
-  lastY = y;
-}, { passive: true });
 let seenDay = todayIso();
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState !== "visible" || !D) return;
@@ -821,9 +907,15 @@ document.addEventListener("visibilitychange", () => {
    frames later (~30 ms). On iPhone the glide then runs by itself while the new screen is drawn,
    instead of stuttering through it. Tapping the tab you're on scrolls back to the top, as in iOS. */
 function tabGo(a) {
-  const tabs = [...$$("#tabs a")], to = a.getAttribute("href");
+  const tabs = [...$$("#tabs a")], to = a.getAttribute("href"), bar = $("#tabs");
+  const from = +bar.style.getPropertyValue("--i") || 0, i = tabs.indexOf(a);
   tabs.forEach((x) => x.classList.toggle("on", x === a));
-  $("#tabs").style.setProperty("--i", tabs.indexOf(a));
+  bar.style.setProperty("--i", i);
+  if (i !== from && !reduce && bar.querySelector(".bubble").animate) {  // the pill stretches as it glides, then settles
+    bar.querySelector(".bubble").animate([{ scale: "1 1" }, { scale: `${1 + Math.min(3, Math.abs(i - from)) * 0.07} .94`, offset: 0.35 }, { scale: "1 1" }],
+      { duration: 420, easing: "cubic-bezier(.3,.7,.4,1)" });
+    a.querySelector(".ic").animate([{ transform: "scale(1)" }, { transform: "scale(1.12)", offset: 0.4 }, { transform: "scale(1)" }], { duration: 360, easing: "ease-out" });
+  }
   if (to === keyNow()) { window.scrollTo({ top: 0, behavior: reduce ? "auto" : "smooth" }); return; }
   let done = false;
   const swap = () => { if (done) return; done = true; navDir = "tab"; history.pushState(null, "", to); render(); };
@@ -835,11 +927,11 @@ function tabGo(a) {
 (() => {
   const bar = $("#tabs"), bubble = bar.querySelector(".bubble"), tabs = [...bar.querySelectorAll("a")];
   let sc = null, eatClick = 0;
-  const cell = () => (bar.clientWidth - 10) / tabs.length;
-  const idxAt = (x) => Math.max(0, Math.min(tabs.length - 1, Math.floor((x - bar.getBoundingClientRect().left - 5) / cell())));
+  const P = 4, cell = () => (bar.clientWidth - 2 * P) / tabs.length;
+  const idxAt = (x) => Math.max(0, Math.min(tabs.length - 1, Math.floor((x - bar.getBoundingClientRect().left - P) / cell())));
   function place(x) {
     const r = bar.getBoundingClientRect(), w = cell();
-    const px = Math.max(0, Math.min(r.width - 10 - w, x - r.left - 5 - w / 2));
+    const px = Math.max(0, Math.min(r.width - 2 * P - w, x - r.left - P - w / 2));
     bubble.style.transform = `translateX(${px}px) scale(1.14, 1.1)`;
     const i = idxAt(x); tabs.forEach((t, k) => t.classList.toggle("hover", k === i));
   }
@@ -858,13 +950,13 @@ function tabGo(a) {
   }, { passive: true });
   const end = (e, cancel) => {
     if (!sc) return;
-    const x = e.changedTouches && e.changedTouches[0] ? e.changedTouches[0].clientX : sc.x0, moved = sc.moved;
+    const x = e.changedTouches && e.changedTouches[0] ? e.changedTouches[0].clientX : sc.x0;
     sc = null;
     bar.classList.remove("press");
     tabs.forEach((t) => t.classList.remove("hover"));
     bubble.style.transition = ""; bubble.style.transform = "";  // spring back to the CSS position (--i)
-    if (cancel || !moved) return;  // a plain tap is handled by the link itself
-    eatClick = Date.now();
+    if (cancel) return;
+    eatClick = Date.now();  // act on the finger lifting, not the click that follows it
     tabGo(tabs[idxAt(x)]);
   };
   bar.addEventListener("touchend", (e) => end(e, false), { passive: true });
@@ -982,6 +1074,7 @@ async function boot() {
   if (!location.hash && tripState() === "during") { const t = byDay.get(todayIso().replace(/-/g, "")); if (t) history.replaceState(null, "", "#/day/" + t.id); }
   render();
   setTimeout(preloadPhotos, 900);
+  setTimeout(prebuild, 500);
   if ("serviceWorker" in navigator) {
     // Every build stamps its version into the page. iOS checks for a new version on a cold start; we also
     // check whenever the app comes back to the front. When the newest installed version isn't the one on

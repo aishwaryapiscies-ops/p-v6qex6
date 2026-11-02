@@ -477,7 +477,9 @@ function rememberQ(q) { q = q.trim(); if (!q) return; try { localStorage.setItem
 function searchResults(q) {
   if (!q.trim()) {
     const rec = recentQs();
-    const sug = tripState() === "during" ? ["Today", "Tomorrow", "Train", "Hotel", "To book"] : ["Christmas", "Train", "Hotel", "Louvre", "To book", "Croissant"];
+    // generic words + a few places from the (encrypted) trip itself, so the public code names nothing
+    const places = [...new Set(D.days.map((d) => (d.place || "").split(" / ")[0]).filter(Boolean))].slice(1, 4);
+    const sug = tripState() === "during" ? ["Today", "Tomorrow", "Train", "Hotel", "To book"] : ["Train", "Hotel", "To book", ...places];
     return (rec.length ? `<section class="sec"><div class="sec-h"><h2>Recent</h2></div><div class="sugg">${rec.map((x) => `<button data-act="q" data-v="${esc(x)}">${ic("search")}${esc(x)}</button>`).join("")}</div></section>` : "")
       + `<section class="sec"><div class="sec-h"><h2>Try</h2></div><div class="sugg">${sug.map((x) => `<button data-act="q" data-v="${esc(x)}">${esc(x)}</button>`).join("")}</div>
       <p class="foot" style="margin:14px 2px 0">Search any place, day, ticket, hotel, café or phrase. Dates work too: “26 dec”, “friday”, “tomorrow”.</p></section>`;

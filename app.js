@@ -176,9 +176,10 @@ function viewHome() {
     // a slow slideshow of what's coming: one photo per place, in trip order
     const seen = new Set(), slides = D.days.filter((d) => d.photo && photo(d.photo) && !seen.has(d.photo) && seen.add(d.photo));
     const cap = (d) => `${esc((d.place || legName(d.leg)).split(" / ")[0])} · ${esc(fmt(d.date))}`;
+    const until = (d) => { const k = Math.round((dObj(d.date) - dObj(t)) / 864e5); return k === 1 ? "Tomorrow" : `In ${k} days`; };  // per slide: how far off that place is
     hero = `<a class="hero slideshow lg-${first.leg}" href="#/day/${first.id}"><div class="hero-head"><h1>${esc(D.trip.title)}</h1><p>${esc(D.trip.sub)}</p></div>
-      ${slides.map((d, i) => `<span class="slide${i ? i === 1 ? " nx" : "" : " on"}"${bg(d.photo, "xl")} data-cap="${cap(d)}"></span>`).join("")}
-      <div class="hero-top"><span class="chip-glass">${ic("pin")}<span class="cap">${slides.length ? cap(slides[0]) : ""}</span></span><span class="chip-glass">${n === 1 ? "Tomorrow" : "In " + n + " days"}</span></div>
+      ${slides.map((d, i) => `<span class="slide${i ? i === 1 ? " nx" : "" : " on"}"${bg(d.photo, "xl")} data-cap="${cap(d)}" data-when="${until(d)}"></span>`).join("")}
+      <div class="hero-top"><span class="chip-glass">${ic("pin")}<span class="cap">${slides.length ? cap(slides[0]) : ""}</span></span><span class="chip-glass"><span class="cap when">${slides.length ? until(slides[0]) : n === 1 ? "Tomorrow" : "In " + n + " days"}</span></span></div>
       <div class="hero-bot"><span class="hero-big tnum">${n}</span><span class="hero-title">${n === 1 ? "day" : "days"} until ${esc(D.trip.title)}</span>
       <span class="hero-sub">${D.legs.map((l) => esc(l.name)).join(" · ")} · ${D.days.length} days</span></div></a>`;
   } else if (st === "during" && today) {
@@ -892,8 +893,9 @@ setInterval(() => {  // advance the pre-trip slideshow on the visible home scree
   nx.classList.remove("nx"); sl[(i + 2) % sl.length].classList.add("nx");  // the one after starts decoding now
   setTimeout(() => sl[i].classList.remove("was"), 1800);
   nx.classList.add("on");
-  const c = show.querySelector(".cap");
-  if (c) { c.style.opacity = 0; setTimeout(() => { c.innerHTML = nx.dataset.cap; c.style.opacity = 1; }, 380); }
+  for (const c of show.querySelectorAll(".cap")) {  // place on the left, how many days until it on the right
+    c.style.opacity = 0; setTimeout(() => { c.innerHTML = c.classList.contains("when") ? nx.dataset.when : nx.dataset.cap; c.style.opacity = 1; }, 380);
+  }
 }, 4800);
 let seenDay = todayIso();
 document.addEventListener("visibilitychange", () => {
